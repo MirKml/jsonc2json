@@ -23,8 +23,48 @@ BEGIN {
     next
 }
 
+/\/\*/ {
+
+}
+
 is_comment { next }
-{ print }
+{ strip_comment($0) }
+
+function strip_comment(input_line,      i, current_char, state, output)
+{
+    state = ""
+    output = ""
+    token = ""
+
+    for (i = 0; i < length(input_line); i++) {
+        print ("state: " state)
+        current_char = substr($0, i, 1);
+
+        if (current_char == "\"") {
+            if (state == "in_string") {
+                state = ""
+            }
+        }
+        else if (current_char == "/") {
+            if (state == "in_string")
+        }
+
+        token = token current_char
+        state = handle_state(state, token)
+
+        if (state == "exit") break
+    }
+
+    return output
+}
+
+function handle_state(state, token)
+{
+    if (!state == "") {
+        if (token == "//") return "exit"
+    }
+    return state
+}
 '
 }
 
@@ -34,6 +74,13 @@ main() {
 }
 
 _tests() {
+    cat <<JSONC | main
+{
+    "prop1": "test" //line comment
+}
+JSONC
+return
+
     cat <<JSONC | main
 {
     "prop1": "prop1Value"
