@@ -23,7 +23,16 @@ BEGIN {
     next
 }
 
-in_multi_line_comment { next }
+# return all after multiline comment end - "*/"
+in_multi_line_comment == 1 {
+    if (match(
+    comment_position = index($0, "*/")
+    if (comment_position > 0) {
+        print substr($0, comment_position + 2)
+    }
+    in_multi_line_comment = 0
+}
+
 { print strip_comments($0) }
 
 function strip_comments(input_line,      current_pos, current_char, token_val, output)
@@ -138,6 +147,21 @@ main() {
 }
 
 _tests() {
+    cat <<JSONC | main
+{
+    "prop1": "prop1Value"
+    // first comment
+    /* second comment */
+    "prop2": { "prop21": "prop21Value" }
+    "prop3": [
+     /* "arr31",
+        "arr32",
+        "arr33" */ "arr34" ]
+    }
+}
+JSONC
+return
+
     cat <<JSONC | main
     "prop1": /* "inner comment // */ "prop1 value"
 JSONC
