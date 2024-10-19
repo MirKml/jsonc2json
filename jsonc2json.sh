@@ -25,12 +25,20 @@ BEGIN {
 
 # return all after multiline comment end - "*/"
 in_multi_line_comment == 1 {
-    if (match(
+    # no end of multi line comment foud
+    # we are still in comment, so print nothig
+    if ($0 !~ /\*\//) {
+        next
+    }
+
+    # remove all to the end of comment
+    # save it as current line a go to the next awk line processing
     comment_position = index($0, "*/")
     if (comment_position > 0) {
-        print substr($0, comment_position + 2)
+        $0 = substr($0, comment_position + 2)
+        in_multi_line_comment = 0
     }
-    in_multi_line_comment = 0
+
 }
 
 { print strip_comments($0) }
@@ -149,15 +157,14 @@ main() {
 _tests() {
     cat <<JSONC | main
 {
-    "prop1": "prop1Value"
+    "prop1": "prop1Value",
     // first comment
     /* second comment */
-    "prop2": { "prop21": "prop21Value" }
+    "prop2": { "prop21": "prop21Value" },
     "prop3": [
      /* "arr31",
         "arr32",
         "arr33" */ "arr34" ]
-    }
 }
 JSONC
 return
