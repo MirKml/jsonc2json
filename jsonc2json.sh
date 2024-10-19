@@ -10,33 +10,30 @@ strip_multi_line_comments() {
     awk \
 '
 BEGIN {
-    is_comment = 0
+    in_multi_line_comment = 0
 }
 
 /^[[:blank:]]*\/\*/ {
-    is_comment = 1
+    in_multi_line_comment = 1
     next
 }
 
 /\*\/[[:blank:]]*$/ {
-    is_comment = 0
+    in_multi_line_comment = 0
     next
 }
 
-/\/\*/ {
-
-}
-
-is_comment { next }
+in_multi_line_comment { next }
 { print strip_comments($0) }
 
 function strip_comments(input_line,      current_pos, current_char, token_val, output)
 {
 
     output = ""
+    # necessary substr() starts with 1
     current_pos = 1
 
-    # print input_line
+    # print "line: " input_line
     # print "length: " length(input_line)
 
     while (current_pos <= length(input_line)) {
@@ -68,6 +65,10 @@ function strip_comments(input_line,      current_pos, current_char, token_val, o
             # it was finished because the end of input line
             if (current_pos >= length(input_line)) {
                 output = output "\"" token_val
+                # last characted on line was ", but it was skipped via break
+                if (current_char == "\"") {
+                    output = output "\""
+                }
             # it was break because of end of string
             } else {
                 output = output "\"" token_val "\""
@@ -89,6 +90,27 @@ function strip_comments(input_line,      current_pos, current_char, token_val, o
             # return current output as final
             if (token_val == "//") {
                 break
+            }
+
+            # multi line comments
+            if (token_val == "/*") {
+                # read until the end of string or end of input line
+                while (++current_pos <= length(input_line)) {
+                    current_char = get_current_char(input_line, current_pos)
+                    token_val = token_val current_char
+                    # if latest 2 string in token are */ - closing comment
+                    if (substr(token_val, length(token_val) - 1) == "*/") {
+                        # print "found multiline comment: " token_val
+                        # next input char iteration
+                        break
+                    }
+                }
+
+                # whole line was processed and we are still in multiline comment
+                if (current_pos >= length(input_line)) {
+                    in_multi_line_comment = 1
+                }
+                token_val = ""
             }
 
             output = output token_val
@@ -116,11 +138,22 @@ main() {
 }
 
 _tests() {
+    cat <<JSONC | main
+    "prop1": /* "inner comment // */ "prop1 value"
+JSONC
+return
+
+    cat <<JSONC | main
+"pure string"
+JSONC
+return
+
     #  not correctly closed stringbadly ended
     cat <<JSONC | main
     "prop1": "unclosed string
 JSONC
 return
+
     cat <<JSONC | main
 {
     "prop1": "test\"with escape and // line comment start inside" // line comment
