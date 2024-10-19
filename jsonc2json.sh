@@ -28,42 +28,84 @@ BEGIN {
 }
 
 is_comment { next }
-{ strip_comment($0) }
+{ print strip_comments($0) }
 
-function strip_comment(input_line,      i, current_char, state, output)
+function strip_comments(input_line,      current_pos, current_char, token_val, output)
 {
-    state = ""
+
     output = ""
-    token = ""
+    current_pos = 1
 
-    for (i = 0; i < length(input_line); i++) {
-        print ("state: " state)
-        current_char = substr($0, i, 1);
+    # print input_line
+    # print "length: " length(input_line)
 
+    while (current_pos <= length(input_line)) {
+        current_char = get_current_char(input_line, current_pos)
+        # print "main iter: current_char: " current_char current_pos " output : " output
+
+        # string e.g. "some string input with escape \" rest of string"
         if (current_char == "\"") {
-            if (state == "in_string") {
-                state = ""
+            token_val = ""
+
+            # read until the end of string or end of input line
+            while (++current_pos <= length(input_line)) {
+                current_char = get_current_char(input_line, current_pos)
+
+                # end of string
+                if (current_char == "\"") {
+                    break
+                }
+
+                # escape, get next char immediatelly
+                if (current_char == "\\") {
+                    token_val = token_val current_char
+                    current_char = get_current_char(input_line, ++current_pos)
+                }
+
+                token_val = token_val current_char
             }
-        }
-        else if (current_char == "/") {
-            if (state == "in_string")
+
+            # it was finished because the end of input line
+            if (current_pos >= length(input_line)) {
+                output = output "\"" token_val
+            # it was break because of end of string
+            } else {
+                output = output "\"" token_val "\""
+            }
+
+            # next input char iteration
+            current_pos++
+            continue
         }
 
-        token = token current_char
-        state = handle_state(state, token)
+        # one line comments //
+        if (current_char == "/") {
+            token_val = current_char
+            # get next char immediatelly
+            current_char = get_current_char(input_line, ++current_pos)
+            token_val = token_val current_char
 
-        if (state == "exit") break
+            # start of line comment, stop reading rest of input,
+            # return current output as final
+            if (token_val == "//") {
+                break
+            }
+
+            output = output token_val
+            # next input char iteration
+            current_pos++
+            continue
+        }
+
+        output = output current_char
+        current_pos++
     }
 
     return output
 }
 
-function handle_state(state, token)
-{
-    if (!state == "") {
-        if (token == "//") return "exit"
-    }
-    return state
+function get_current_char(input_line, current_pos) {
+    return substr(input_line, current_pos, 1)
 }
 '
 }
@@ -74,9 +116,14 @@ main() {
 }
 
 _tests() {
+    #  not correctly closed stringbadly ended
+    cat <<JSONC | main
+    "prop1": "unclosed string
+JSONC
+return
     cat <<JSONC | main
 {
-    "prop1": "test" //line comment
+    "prop1": "test\"with escape and // line comment start inside" // line comment
 }
 JSONC
 return
