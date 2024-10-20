@@ -152,24 +152,16 @@ function remove_comments(input_line,      current_pos, current_char, token_val, 
     return trim_right(output)
 }
 
-function get_current_char(input_line, current_pos) {
-    return substr(input_line, current_pos, 1)
-}
-
-function trim_right(str) {
-    gsub(/[ \t]+$/, "", str)
-    return str
-}
-
 function remove_trailing_comma(input_line,      current_pos, current_char, output, buffer, is_trailing) {
     output = ""
     current_pos = 1
 
-    # print "line: " input_line
+    #print "line: " input_line
     # print "length: " length(input_line)
 
     while (current_pos <= length(input_line)) {
         current_char = get_current_char(input_line, current_pos)
+        print "current_char_main: " current_char
 
         # string e.g. "some string input with escape \" rest of string"
         if (current_char == "\"") {
@@ -179,10 +171,10 @@ function remove_trailing_comma(input_line,      current_pos, current_char, outpu
             # read until the end of string or end of input line
             while (current_pos <= length(input_line)) {
                 current_char = get_current_char(input_line, current_pos)
+                output = output current_char
 
                 # end of string
                 if (current_char == "\"") {
-                    output = output current_char
                     break
                 }
 
@@ -191,47 +183,68 @@ function remove_trailing_comma(input_line,      current_pos, current_char, outpu
                     current_char = get_current_char(input_line, ++current_pos)
                     output = output current_char
                 }
+
                 current_pos++
             }
 
-            # next input char iteration
-            current_pos++
-            continue
-        }
-
-        # comma, better to detect for comman in array, but it's more complicated
-        # we already handled comma in string, comments, sot it's enough
-        if (current_char == ",") {
+        # trailing comma handling
+        } else if (current_char == ",") {
+            print "handle trailing , start"
             is_trailing = 0
             buffer = ","
 
             current_pos++
             while (current_pos <= length(input_line)) {
                 current_char = get_current_char(input_line, current_pos)
-                if (current_char == " ") {
-                    buffer = buffer current_char
-                # end of array, trailing comman
-                } else if (current_char == "]") {
+                buffer = buffer current_char
+
+                # end of array
+                if (current_char == "]") {
                     is_trailing = 1
                     break
-                # other chars, means no trailing comma
-                } else {
-                    buffer = buffer current_char
+                # other chars than space, means no trailing comma
+                } else if (current_char != " ") {
                     break
                 }
+
                 current_pos++
             }
             if (is_trailing) {
-                gsub(/, *\]?/, "", buffer)
+                print "buffer: " buffer
+                gsub(/^,/, "", buffer)
+                gsub(/ +]$/, " ]", buffer)
+            } else {
+                # we need to get one char back, because we read
+                # char e.g. " which isn'\''t processed correctly e.g. as string start
+                buffer = substr(buffer, 1, length(buffer) - 1)
+                current_pos--
             }
+
             output = output buffer
+
+            # cleanup
             buffer = ""
+            is_trailing = 0
+
+        # other char
+        } else {
+            # next input char iteration
+            output = output current_char
         }
 
-        # next input char iteration
         current_pos++
-        continue
     }
+
+    return output
+}
+
+function get_current_char(input_line, current_pos) {
+    return substr(input_line, current_pos, 1)
+}
+
+function trim_right(str) {
+    gsub(/[ \t]+$/, "", str)
+    return str
 }
 '
 }
@@ -244,6 +257,7 @@ _tests() {
     result_status=1
     local json_orig=\""arrayProp\": [ 0, 1, \"test\", ]"
     local json_expected=\""arrayProp\": [ 0, 1, \"test\"]"
+    echo "original: $json_orig"; echo "expected: $json_expected"
     main <<< "$json_orig"
     return
 
