@@ -199,34 +199,6 @@ function remove_trailing_comma(input_line,      current_pos, current_char, outpu
             continue
         }
 
-        # comma, better to detect for comman in array, but it's more complicated
-        # we already handled comma in string, comments, sot it's enough
-        if (current_char == ",") {
-            is_trailing = 0
-            buffer = ","
-
-            current_pos++
-            while (current_pos <= length(input_line)) {
-                current_char = get_current_char(input_line, current_pos)
-                if (current_char == " ") {
-                    buffer = buffer current_char
-                # end of array, trailing comman
-                } else if (current_char == "]") {
-                    is_trailing = 1
-                    break
-                # other chars, means no trailing comma
-                } else {
-                    buffer = buffer current_char
-                    break
-                }
-                current_pos++
-            }
-            if (is_trailing) {
-                gsub(/, *\]?/, "", buffer)
-            }
-            output = output buffer
-            buffer = ""
-        }
 
         # next input char iteration
         current_pos++
