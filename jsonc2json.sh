@@ -2,11 +2,16 @@
 # removes
 set -euo pipefail
 
-strip_line_comments() {
+strip_alone_line_comments() {
     sed -e "/^[[:blank:]]*\/\//d" -e "/^[[:blank:]]*\/\*.*\*\/[[:blank:]]*$/d"
 }
 
-strip_multi_line_comments() {
+# removes
+# - single line comments
+# - multiple line comments
+# - trailing commas in arrays
+# all these can be mixed inside with other json like chars
+strip_jsonc_specific_chars() {
     awk \
 '
 BEGIN {
@@ -25,14 +30,14 @@ BEGIN {
 
 # return all after multiline comment end - "*/"
 in_multi_line_comment == 1 {
-    # no end of multi line comment foud
+    # no end of multi line comment found
     # we are still in comment, so print nothig
     if ($0 !~ /\*\//) {
         next
     }
 
-    # remove all to the end of comment
-    # save it as current line a go to the next awk line processing
+    # remove everything from start to the end of comment
+    # save it as current line a go to the next awk line pattern processing
     comment_position = index($0, "*/")
     if (comment_position > 0) {
         $0 = substr($0, comment_position + 2)
@@ -41,14 +46,16 @@ in_multi_line_comment == 1 {
     }
 
 }
+{
+    $0 = remove_comments($0)
+    print remove_trailing_comma($0)
+}
 
-{ print strip_comments($0) }
-
-function strip_comments(input_line,      current_pos, current_char, token_val, output)
+function remove_comments(input_line,      current_pos, current_char, token_val, output)
 {
 
     output = ""
-    # necessary substr() starts with 1
+    # all awk string starts on index 1
     current_pos = 1
 
     # print "line: " input_line
@@ -153,15 +160,97 @@ function trim_right(str) {
     gsub(/[ \t]+$/, "", str)
     return str
 }
+
+function remove_trailing_comma(input_line,      current_pos, current_char, output, buffer, is_trailing) {
+    output = ""
+    current_pos = 1
+
+    # print "line: " input_line
+    # print "length: " length(input_line)
+
+    while (current_pos <= length(input_line)) {
+        current_char = get_current_char(input_line, current_pos)
+
+        # string e.g. "some string input with escape \" rest of string"
+        if (current_char == "\"") {
+
+            output = output current_char
+            current_pos++;
+            # read until the end of string or end of input line
+            while (current_pos <= length(input_line)) {
+                current_char = get_current_char(input_line, current_pos)
+
+                # end of string
+                if (current_char == "\"") {
+                    output = output current_char
+                    break
+                }
+
+                # escape, get next char immediatelly
+                if (current_char == "\\") {
+                    current_char = get_current_char(input_line, ++current_pos)
+                    output = output current_char
+                }
+                current_pos++
+            }
+
+            # next input char iteration
+            current_pos++
+            continue
+        }
+
+        # comma, better to detect for comman in array, but it's more complicated
+        # we already handled comma in string, comments, sot it's enough
+        if (current_char == ",") {
+            is_trailing = 0
+            buffer = ","
+
+            current_pos++
+            while (current_pos <= length(input_line)) {
+                current_char = get_current_char(input_line, current_pos)
+                if (current_char == " ") {
+                    buffer = buffer current_char
+                # end of array, trailing comman
+                } else if (current_char == "]") {
+                    is_trailing = 1
+                    break
+                # other chars, means no trailing comma
+                } else {
+                    buffer = buffer current_char
+                    break
+                }
+                current_pos++
+            }
+            if (is_trailing) {
+                gsub(/, *\]?/, "", buffer)
+            }
+            output = output buffer
+            buffer = ""
+        }
+
+        # next input char iteration
+        current_pos++
+        continue
+    }
+}
 '
 }
 
 main() {
-    strip_line_comments | strip_multi_line_comments
+    strip_alone_line_comments | strip_jsonc_specific_chars
 }
 
 _tests() {
     result_status=1
+    local json_orig=\""arrayProp\": [ 0, 1, \"test\", ]"
+    local json_expected=\""arrayProp\": [ 0, 1, \"test\"]"
+    main <<< "$json_orig"
+    return
+
+    local message="test no. 1"
+    [ "$json_expected" = "$json_result" ] && echo "$message OK" \
+        || { result_status=0; echo "$message FAILED"; }
+    return
 
     local json_orig=$(cat <<JSONC
     "prop1": /* "inner comment // */ "prop1 value"
