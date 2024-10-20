@@ -36,6 +36,7 @@ in_multi_line_comment == 1 {
     comment_position = index($0, "*/")
     if (comment_position > 0) {
         $0 = substr($0, comment_position + 2)
+        $0 = trim_right($0)
         in_multi_line_comment = 0
     }
 
@@ -140,82 +141,100 @@ function strip_comments(input_line,      current_pos, current_char, token_val, o
         current_pos++
     }
 
-    return output
+    # trim ending spaces
+    return trim_right(output)
 }
 
 function get_current_char(input_line, current_pos) {
     return substr(input_line, current_pos, 1)
 }
+
+function trim_right(str) {
+    gsub(/[ \t]+$/, "", str)
+    return str
+}
 '
 }
-
 
 main() {
     strip_line_comments | strip_multi_line_comments
 }
 
 _tests() {
-    cat <<JSONC | main
-{
-    "prop1": "prop1Value",
-    // first comment
-    /* second comment */
-    "prop2": { "prop21": "prop21Value" },
-    "prop3": [
-     /* "arr31",
-        "arr32",
-        "arr33" */ "arr34" ]
-}
-JSONC
-return
+    result_status=1
 
-    cat <<JSONC | main
+    local json_orig=$(cat <<JSONC
     "prop1": /* "inner comment // */ "prop1 value"
 JSONC
-return
+)
+    local json_expected='    "prop1":  "prop1 value"'
+    local json_result=$(main <<< "$json_orig")
+    local message="test no. 1"
+    [ "$json_expected" = "$json_result" ] && echo "$message OK" \
+        || { result_status=0; echo "$message FAILED"; }
 
-    cat <<JSONC | main
-"pure string"
-JSONC
-return
+    json_orig=\""pure JSON string with quotes \""
+    json_expected="$json_orig"
+    json_result=$(main <<< "$json_orig")
+    local message="test no. 2"
+    [ "$json_expected" = "$json_result" ] && echo "$message OK" \
+        || { result_status=0; echo "$message FAILED"; }
 
-    #  not correctly closed stringbadly ended
-    cat <<JSONC | main
-    "prop1": "unclosed string
-JSONC
-return
+    #  not correctly closed string
+    json_orig="\"prop1\": \"unclosed string"
+    json_expected="$json_orig"
+    json_result=$(main <<< "$json_orig")
+    local message="test no. 3"
+    [ "$json_expected" = "$json_result" ] && echo "$message OK" \
+        || { result_status=0; echo "$message FAILED"; }
 
-    cat <<JSONC | main
+
+    # test for: line commnet
+    # - in string
+    # - after json content
+    json_orig=$(cat <<JSONC
 {
-    "prop1": "test\"with escape and // line comment start inside" // line comment
+    "prop1": "test\"with escape and // line comment start inside string" // after line comment
 }
 JSONC
-return
+)
 
-    cat <<JSONC | main
+    json_expected=$(cat <<JSONC
 {
-    "prop1": "prop1Value"
-    // first comment
-    /* second comment */
-    "prop2": { "prop21": "prop21Value" }
-    /* multi line in single line 22 @ ;'**/
-    "prop2": { "prop21": "prop21Value" }
-
-    "prop3": {
-        /** comments some part of json, uncomment later
-        "prop31Comment": {
-            "prop311": null,
-            "prop312: 22
-        }
-        */
-        "prop32": {
-            "prop32": "test"
-            "prop312": 22
-            "prop313": true
-        }
-    }
+    "prop1": "test\"with escape and // line comment start inside string"
 }
 JSONC
+)
+    json_result=$(main <<< "$json_orig")
+    local message="test no. 4"
+    [ "$json_expected" = "$json_result" ] && echo "$message OK" \
+        || { result_status=0; echo "$message FAILED"; }
+    # echo "result: $json_result"; echo "expected: $json_expected"
+
+#    cat <<JSONC | main
+#{
+#    "prop1": "prop1Value"
+#    // first comment
+#    /* second comment */
+#    "prop2": { "prop21": "prop21Value" }
+#    /* multi line in single line 22 @ ;'**/
+#    "prop2": { "prop21": "prop21Value" }
+#
+#    "prop3": {
+#        /** comments some part of json, uncomment later
+#        "prop31Comment": {
+#            "prop311": null,
+#            "prop312: 22
+#        }
+#        */
+#        "prop32": {
+#            "prop32": "test"
+#            "prop312": 22
+#            "prop313": true
+#        }
+#    }
+#}
+#JSONC
 }
 
 _tests
