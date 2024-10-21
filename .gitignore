@@ -1,0 +1,11 @@
+# common IDE files/folders
+.vscode
+!.vscode/tasks.json
+.DS_STORE
+.module-cache
+*.log*
+sln
+.vs
+.idea
+# vim swap files
+*.swp
