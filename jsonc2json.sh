@@ -156,40 +156,22 @@ function remove_trailing_comma(input_line,      current_pos, current_char, outpu
     output = ""
     current_pos = 1
 
-    #print "line: " input_line
+    # print "line: " input_line
     # print "length: " length(input_line)
 
     while (current_pos <= length(input_line)) {
         current_char = get_current_char(input_line, current_pos)
-        print "current_char_main: " current_char
+        # print "current_char_main: " current_char
 
         # string e.g. "some string input with escape \" rest of string"
         if (current_char == "\"") {
-
-            output = output current_char
-            current_pos++;
-            # read until the end of string or end of input line
-            while (current_pos <= length(input_line)) {
-                current_char = get_current_char(input_line, current_pos)
-                output = output current_char
-
-                # end of string
-                if (current_char == "\"") {
-                    break
-                }
-
-                # escape, get next char immediatelly
-                if (current_char == "\\") {
-                    current_char = get_current_char(input_line, ++current_pos)
-                    output = output current_char
-                }
-
-                current_pos++
-            }
+            buffer = get_next_string(input_line, current_pos)
+            output = output buffer
+            current_pos += length(buffer) - 1
 
         # trailing comma handling
         } else if (current_char == ",") {
-            print "handle trailing , start"
+            #print "handle trailing , start"
             is_trailing = 0
             buffer = ","
 
@@ -210,11 +192,11 @@ function remove_trailing_comma(input_line,      current_pos, current_char, outpu
                 current_pos++
             }
             if (is_trailing) {
-                print "buffer: " buffer
-                gsub(/^,/, "", buffer)
-                gsub(/ +]$/, " ]", buffer)
-            } else {
-                # we need to get one char back, because we read
+                gsub(/^,]/, "]", buffer)
+                gsub(/^, +]/, " ]", buffer)
+            # if something read
+            } else if (buffer != ",") {
+                # we need to get one char back, because we red
                 # char e.g. " which isn'\''t processed correctly e.g. as string start
                 buffer = substr(buffer, 1, length(buffer) - 1)
                 current_pos--
@@ -235,7 +217,35 @@ function remove_trailing_comma(input_line,      current_pos, current_char, outpu
         current_pos++
     }
 
-    return output
+    return trim_right(output)
+}
+
+# get next json string from current line and position
+function get_next_string(input_line, current_pos,   current_char, buffer) {
+    current_char = get_current_char(input_line, current_pos)
+    buffer = current_char
+
+    current_pos++;
+    # read until the end of string or end of input line
+    while (current_pos <= length(input_line)) {
+        current_char = get_current_char(input_line, current_pos)
+        buffer = buffer current_char
+
+        # end of string
+        if (current_char == "\"") {
+            break
+        }
+
+        # escape, get next char immediatelly
+        if (current_char == "\\") {
+            current_char = get_current_char(input_line, ++current_pos)
+            buffer = buffer current_char
+        }
+
+        current_pos++
+    }
+
+    return buffer
 }
 
 function get_current_char(input_line, current_pos) {
@@ -254,47 +264,93 @@ main() {
 }
 
 _tests() {
-    result_status=1
-    local json_orig=\""arrayProp\": [ 0, 1, \"test\", ]"
-    local json_expected=\""arrayProp\": [ 0, 1, \"test\"]"
-    echo "original: $json_orig"; echo "expected: $json_expected"
-    main <<< "$json_orig"
-    return
+    local result_status=1
 
-    local message="test no. 1"
+    local json_orig=\""arrayProp\": [ 0, 1, \"test\", ]"
+    local json_expected=\""arrayProp\": [ 0, 1, \"test\" ]"
+    local json_result=$(main <<< "$json_orig")
+    #echo -e "original: $json_orig\nexpected: $json_expected\nresult: $json_result"
+    local message="test trailing comma no. 1"
     [ "$json_expected" = "$json_result" ] && echo "$message OK" \
         || { result_status=0; echo "$message FAILED"; }
-    return
-
-    local json_orig=$(cat <<JSONC
+#===========
+    json_orig="[ 0, 1, \"test\",] "
+    json_expected="[ 0, 1, \"test\"]"
+    json_result=$(main <<< "$json_orig")
+    message="test trailing comma no. 2"
+    [ "$json_expected" = "$json_result" ] && echo "$message OK" \
+        || { result_status=0; echo "$message FAILED"; }
+#===========
+    json_orig=$(cat <<JSONC
+"prop1": [ "arrval1", "arrVal2", 12,
+    "test",
+    null,
+],
+JSONC
+)
+    local json_expected=$(cat <<JSONC
+"prop1": [ "arrval1", "arrVal2", 12,
+    "test",
+    null,
+],
+JSONC
+)
+    json_result=$(main <<< "$json_orig")
+    message="test trailing comma no. 2"
+    [ "$json_expected" = "$json_result" ] && echo "$message OK" \
+        || { result_status=0; echo "$message FAILED"; }
+#===========
+    json_orig=$(cat <<JSONC
+{
+    "prop1": [ arrval1, "arrVal2", null,
+               1234, "arraVal 3" ]
+    "prop2": {
+        "prop21",
+    }
+}
+JSONC
+)
+    json_expected=$(cat <<JSONC
+{
+    "prop1": [ arrval1, "arrVal2", null,
+               1234, "arraVal 3" ]
+    "prop2": {
+        "prop21",
+    }
+}
+JSONC
+)
+    json_result=$(main <<< "$json_orig")
+    message="test trailing comma no. 4"
+    [ "$json_expected" = "$json_result" ] && echo "$message OK" \
+        || { result_status=0; echo "$message FAILED"; }
+#===========
+    json_orig=$(cat <<JSONC
     "prop1": /* "inner comment // */ "prop1 value"
 JSONC
 )
-    local json_expected='    "prop1":  "prop1 value"'
-    local json_result=$(main <<< "$json_orig")
-    local message="test no. 1"
+    json_expected="    \"prop1\":  \"prop1 value\""
+    json_result=$(main <<< "$json_orig")
+    message="test multi line comment no. 1"
     [ "$json_expected" = "$json_result" ] && echo "$message OK" \
         || { result_status=0; echo "$message FAILED"; }
-
+#===========
+    message="test pure string with quotes"
     json_orig=\""pure JSON string with quotes \""
     json_expected="$json_orig"
     json_result=$(main <<< "$json_orig")
-    local message="test no. 2"
+    message="test pure string with quotes"
     [ "$json_expected" = "$json_result" ] && echo "$message OK" \
         || { result_status=0; echo "$message FAILED"; }
-
-    #  not correctly closed string
+#===========
+    message="test not correctly closed string"
     json_orig="\"prop1\": \"unclosed string"
     json_expected="$json_orig"
     json_result=$(main <<< "$json_orig")
-    local message="test no. 3"
     [ "$json_expected" = "$json_result" ] && echo "$message OK" \
         || { result_status=0; echo "$message FAILED"; }
-
-
-    # test for: line commnet
-    # - in string
-    # - after json content
+#===========
+    message="test line comment in string, after json content"
     json_orig=$(cat <<JSONC
 {
     "prop1": "test\"with escape and // line comment start inside string" // after line comment
@@ -309,36 +365,74 @@ JSONC
 JSONC
 )
     json_result=$(main <<< "$json_orig")
-    local message="test no. 4"
     [ "$json_expected" = "$json_result" ] && echo "$message OK" \
         || { result_status=0; echo "$message FAILED"; }
-    # echo "result: $json_result"; echo "expected: $json_expected"
+#===========
+    message="integration test no. 1"
+    json_orig=$(cat <<JSONC
+{
+    "prop1": "prop1Value"
+    // alone line comment
+    /* alone multi line comment */
+    "prop2": { "prop21": "prop21Value" }
 
-#    cat <<JSONC | main
-#{
-#    "prop1": "prop1Value"
-#    // first comment
-#    /* second comment */
-#    "prop2": { "prop21": "prop21Value" }
-#    /* multi line in single line 22 @ ;'**/
-#    "prop2": { "prop21": "prop21Value" }
-#
-#    "prop3": {
-#        /** comments some part of json, uncomment later
-#        "prop31Comment": {
-#            "prop311": null,
-#            "prop312: 22
-#        }
-#        */
-#        "prop32": {
-#            "prop32": "test"
-#            "prop312": 22
-#            "prop313": true
-#        }
-#    }
-#}
-#JSONC
+    "prop3": {
+        "prop31": {
+            "prop311": null,
+            "prop312: [ arr1, arr2,
+                arr3,
+                arr4,
+            ]
+        }
+        /** comments some part of json, uncomment later
+        "prop31Comment": {
+            "prop311": null,
+            "prop312: 22
+        }
+        */
+        "prop32": {
+            "prop32": "test"
+            "prop312": 22
+            "prop313": true
+        }
+    }
+    /* "prop4": {
+       } //
+    */ "prop4": { // test
+            "prop41": "value"
+        }
 }
+JSONC
+)
 
+    json_expected=$(cat <<JSONC
+{
+    "prop1": "prop1Value"
+    "prop2": { "prop21": "prop21Value" }
+
+    "prop3": {
+        "prop31": {
+            "prop311": null,
+            "prop312: [ arr1, arr2,
+                arr3,
+                arr4,
+            ]
+        }
+        "prop32": {
+            "prop32": "test"
+            "prop312": 22
+            "prop313": true
+        }
+    }
+ "prop4": {
+            "prop41": "value"
+        }
+}
+JSONC
+)
+    json_result=$(main <<< "$json_orig")
+    [ "$json_expected" = "$json_result" ] && echo "$message OK" \
+        || { result_status=0; echo "$message FAILED"; }
+}
 _tests
 
