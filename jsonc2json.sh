@@ -6,6 +6,27 @@ strip_alone_line_comments() {
     sed -e "/^[[:blank:]]*\/\//d" -e "/^[[:blank:]]*\/\*.*\*\/[[:blank:]]*$/d"
 }
 
+strip_trailing_commas() {
+
+    sed -e '
+# sets a label named "a"
+:a
+
+# "$!" if not the last line, then
+# "N" append the next line to the pattern space (or quit if there is no next line)
+# and "ba" branch (go to) label "a"
+$!{N;ba}
+
+# replace trailing commans with blanks ,<spaces>} with }
+s/,[[:blank:]]*\([]}]\)/ \1/g
+
+# replace trailing commans with new lines blanks ,\n<spaces>}" with \n<spaces>}
+s/,\n\([[:blank:]]*\)\([]}]\)/\n\1\2/g
+
+# last resort, trailing commans with new lines or spaces before "}"
+s/,[[:space:]]*\([]}]\)/ \1/g;'
+}
+
 # removes
 # - single line comments
 # - multiple line comments
@@ -50,14 +71,14 @@ In_multi_line_comment == 1 {
 
 }
 {
-    $0 = remove_comments($0)
-    $0 = remove_trailing_comma($0)
-    if (Multi_line_array["is_open"]) {
-        # do not trim if multi line is open
-        printf($0)
-    } else {
-        printf(trim_right($0), "\n")
-    }
+    print $0 = remove_comments($0)
+    #$0 = (remove_trailing_comma($0))
+    #if (Multi_line_array["is_open"]) {
+    #    # do not trim if multi line is open
+    #    printf($0)
+    #} else {
+    #    printf(trim_right($0), "\n")
+    #}
 }
 
 function remove_comments(input_line,      current_pos, current_char, buffer, token_val, output) {
@@ -272,7 +293,7 @@ function quote(str, quoting_char) {
 }
 
 main() {
-    strip_alone_line_comments | strip_jsonc_specific_chars
+    strip_alone_line_comments | strip_jsonc_specific_chars | strip_trailing_commas
 }
 
 _tests() {
@@ -288,7 +309,7 @@ _tests() {
 #===========
     message="test trailing comma no. 2"
     json_orig="[ 0, 1, \"test\",] "
-    json_expected="[ 0, 1, \"test\"]"
+    json_expected="[ 0, 1, \"test\" ]"
     json_result=$(main <<< "$json_orig")
     [ "$json_expected" = "$json_result" ] && echo "$message OK" \
         || { result_status=0; echo "$message FAILED"; }
@@ -298,14 +319,14 @@ _tests() {
 "prop1": [ "arrval1", "arrVal2", 12,
     "test",
     null,
-],
+    ],
 JSONC
 )
-    local json_expected=$(cat <<JSONC
+    json_expected=$(cat <<JSONC
 "prop1": [ "arrval1", "arrVal2", 12,
     "test",
     null
-],
+    ],
 JSONC
 )
     json_result=$(main <<< "$json_orig")
@@ -315,20 +336,26 @@ JSONC
     message="test trailing comma no. 4"
     json_orig=$(cat <<JSONC
 {
-    "prop1": [ arrval1, "arrVal2", null,
-               1234, "arraVal 3" ]
+    "prop1": [
+       "arrval1", "arrVal2", null,
+        1234, "arraVal 3",
+    ],
     "prop2": {
-        "prop21",
+        "prop21": null,
+        "prop22": null,
     }
 }
 JSONC
 )
     json_expected=$(cat <<JSONC
 {
-    "prop1": [ arrval1, "arrVal2", null,
-               1234, "arraVal 3" ]
+    "prop1": [
+       "arrval1", "arrVal2", null,
+        1234, "arraVal 3"
+    ],
     "prop2": {
-        "prop21",
+        "prop21": null,
+        "prop22": null
     }
 }
 JSONC
@@ -401,7 +428,7 @@ JSONC
     message="test integration test no. 1"
     json_orig=$(cat <<JSONC
 {
-    "prop1": "prop1Value"
+    "prop1": "prop1Value",
     // alone line comment
     /* alone multi line comment */
     "prop2": { "prop21": "prop21Value" }
@@ -422,7 +449,7 @@ JSONC
         */
         "prop32": {
             "prop32": "test"
-            "prop312": 22
+            "prop312": 22,
             "prop313": true
         }
     }
@@ -437,7 +464,7 @@ JSONC
 
     json_expected=$(cat <<JSONC
 {
-    "prop1": "prop1Value"
+    "prop1": "prop1Value",
     "prop2": { "prop21": "prop21Value" }
 
     "prop3": {
@@ -445,12 +472,12 @@ JSONC
             "prop311": null,
             "prop312: [ arr1, arr2,
                 arr3,
-                arr4,
+                arr4
             ]
         }
         "prop32": {
             "prop32": "test"
-            "prop312": 22
+            "prop312": 22,
             "prop313": true
         }
     }
@@ -470,14 +497,14 @@ _test_one() {
 "prop1": [ "arrval1", "arrVal2", 12,
     "test",
     null,
-],
+    ],
 JSONC
 )
     json_expected=$(cat <<JSONC
 "prop1": [ "arrval1", "arrVal2", 12,
     "test",
     null
-],
+    ],
 JSONC
 )
 
@@ -491,6 +518,6 @@ JSONC
         || { result_status=0; echo "test FAILED"; }
 }
 
-# _tests
-_test_one
+_tests
+#_test_one
 
