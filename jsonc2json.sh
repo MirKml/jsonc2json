@@ -15,22 +15,22 @@ strip_jsonc_specific_chars() {
     awk \
 '
 BEGIN {
-    in_multi_line_comment = 0
-    inside_array = 0
+    In_multi_line_comment = 0
+    In_array = 0
 }
 
 /^[[:blank:]]*\/\*/ {
-    in_multi_line_comment = 1
+    In_multi_line_comment = 1
     next
 }
 
 /\*\/[[:blank:]]*$/ {
-    in_multi_line_comment = 0
+    In_multi_line_comment = 0
     next
 }
 
 # return all after multiline comment end - "*/"
-in_multi_line_comment == 1 {
+In_multi_line_comment == 1 {
     # no end of multi line comment found
     # we are still in comment, so print nothig
     if ($0 !~ /\*\//) {
@@ -43,7 +43,7 @@ in_multi_line_comment == 1 {
     if (comment_position > 0) {
         $0 = substr($0, comment_position + 2)
         $0 = trim_right($0)
-        in_multi_line_comment = 0
+        In_multi_line_comment = 0
     }
 
 }
@@ -63,7 +63,7 @@ function remove_comments(input_line,      current_pos, current_char, buffer, tok
 
     while (current_pos <= length(input_line)) {
         current_char = get_current_char(input_line, current_pos)
-        #print "main iter: current_char: " current_char current_pos " output : " output
+        # printf("rem. comments: pos: %s char: %s out: %s\n", current_pos, current_char, output)
 
         # string e.g. "some string input with escape \" rest of string"
         if (current_char == "\"") {
@@ -102,7 +102,7 @@ function remove_comments(input_line,      current_pos, current_char, buffer, tok
 
                 # whole line was processed and we are still in multiline comment
                 if (current_pos >= length(input_line)) {
-                    in_multi_line_comment = 1
+                    In_multi_line_comment = 1
                 }
                 token_val = ""
             }
@@ -121,8 +121,7 @@ function remove_comments(input_line,      current_pos, current_char, buffer, tok
     return trim_right(output)
 }
 
-function remove_trailing_comma(input_line,
-        current_pos, current_char, output, buffer, next_array_result, is_array_closed) {
+function remove_trailing_comma(input_line,      current_pos, current_char, output, buffer, next_array_result) {
     output = ""
     current_pos = 1
 
@@ -131,22 +130,26 @@ function remove_trailing_comma(input_line,
 
     while (current_pos <= length(input_line)) {
         current_char = get_current_char(input_line, current_pos)
-        # print "current_char_main: " current_char
+        print "current_char_main: " current_char
+
+        # first handle if we are in array context
+        if (In_array) {
+            buffer = get_next_array(input_line, current_pos)
+            output = output buffer
+            current_pos += length(buffer) - 1
 
         # string e.g. "some string input with escape \" rest of string"
-        if (current_char == "\"") {
+        } else if (current_char == "\"") {
             buffer = get_next_string(input_line, current_pos)
             output = output buffer
+            # -1 because already read current_char
             current_pos += length(buffer) - 1
 
-        # array handling
+        # array handling in current context
         } else if (current_char == "[") {
-            next_array_result = get_next_array(input_line, current_pos)
-            buffer = next_array_result[0]
-            is_array_closed = next_array_result[1]
-
-            output = output buffer
+            buffer = get_next_array(input_line, current_pos)
             current_pos += length(buffer) - 1
+            output = output remove_trailing_comma_from_arr(buffer)
 
         # other char
         } else {
@@ -157,38 +160,47 @@ function remove_trailing_comma(input_line,
         current_pos++
     }
 
-    in_array
     return trim_right(output)
 }
 
-function get_next_array(input_line, current_pos,        current_char, buffer, is_closed) {
-    current_char = get_current_char(input_line, current_pos)
-    buffer = current_char
+# get next array string
+# sets In_array as true if array is not closed till the end of line
+function get_next_array(input_line, current_pos,        current_char, output, buffer) {
+    In_array = 1
 
-    is_closed = 0
-    current_pos++;
     while (current_pos <= length(input_line)) {
-        # string
+        current_char = get_current_char(input_line, current_pos)
+        print "current char: " current_char
+
+        # string in array
         if (current_char == "\"") {
             buffer = get_next_string(input_line, current_pos)
             output = output buffer
-            current_pos += length(buffer)
+            current_pos += length(buffer) - 1
+
+        # end of array
         } else if (current_char == "]") {
-            is_closed = 1
-            current_char = get_current_char(input_line, ++current_pos)
-            buffer = buffer current_char
+            output = output current_char
+            In_array = 0
             break;
+
+        # another char
+        } else {
+            output = output current_char
         }
+
+        current_pos++
     }
 
-    if (is_closed) {
-        gsub(/, +]$/, "]", buffer)
-        gsub(/,]$/, "]", buffer)
-    } else {
-        gsub(/, *$/, ",", buffer)
-    }
+    # do not modify returned array, always preserve original length
+    # because we calc the positon according length
+    return output
+}
 
-    return [buffer, is_closed]
+function remove_trailing_comma_from_arr(str) {
+    gsub(/, +]$/, " ]", str)
+    gsub(/,]$/, "]", str)
+    return str
 }
 
 # get next json string from current line and position
@@ -226,6 +238,11 @@ function get_current_char(input_line, current_pos) {
 function trim_right(str) {
     gsub(/[ \t]+$/, "", str)
     return str
+}
+
+function quote(str, quoting_char) {
+    quoting_char = quoting_char ? quoting_char : "'\''"
+    return quoting_char str quoting_char
 }
 '
 }
@@ -425,5 +442,18 @@ JSONC
         || { result_status=0; echo "$message FAILED"; }
 }
 
-_tests
+_test_one() {
+    local json_orig="\"arrayProp\": [ 0, 1, \"test\", ]"
+    local json_expected="\"arrayProp\": [ 0, 1, \"test\" ]"
+    local json_result=$(main <<< "$json_orig")
+
+    echo "original: $json_orig"; echo "expected: $json_expected"
+    echo "result: $json_result"
+
+    [ "$json_expected" = "$json_result" ] && echo "$message OK" \
+        || { result_status=0; echo "$message FAILED"; }
+}
+
+# _tests
+_test_one
 
