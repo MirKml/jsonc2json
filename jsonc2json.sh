@@ -16,6 +16,7 @@ strip_jsonc_specific_chars() {
 '
 BEGIN {
     in_multi_line_comment = 0
+    inside_array = 0
 }
 
 /^[[:blank:]]*\/\*/ {
@@ -51,8 +52,7 @@ in_multi_line_comment == 1 {
     print remove_trailing_comma($0)
 }
 
-function remove_comments(input_line,      current_pos, current_char, token_val, output)
-{
+function remove_comments(input_line,      current_pos, current_char, buffer, token_val, output) {
 
     output = ""
     # all awk string starts on index 1
@@ -63,44 +63,13 @@ function remove_comments(input_line,      current_pos, current_char, token_val, 
 
     while (current_pos <= length(input_line)) {
         current_char = get_current_char(input_line, current_pos)
-        # print "main iter: current_char: " current_char current_pos " output : " output
+        #print "main iter: current_char: " current_char current_pos " output : " output
 
         # string e.g. "some string input with escape \" rest of string"
         if (current_char == "\"") {
-            token_val = ""
-
-            # read until the end of string or end of input line
-            while (++current_pos <= length(input_line)) {
-                current_char = get_current_char(input_line, current_pos)
-
-                # end of string
-                if (current_char == "\"") {
-                    break
-                }
-
-                # escape, get next char immediatelly
-                if (current_char == "\\") {
-                    token_val = token_val current_char
-                    current_char = get_current_char(input_line, ++current_pos)
-                }
-
-                token_val = token_val current_char
-            }
-
-            # it was finished because the end of input line
-            if (current_pos >= length(input_line)) {
-                output = output "\"" token_val
-                # last characted on line was ", but it was skipped via break
-                if (current_char == "\"") {
-                    output = output "\""
-                }
-            # it was break because of end of string
-            } else {
-                output = output "\"" token_val "\""
-            }
-
-            # next input char iteration
-            current_pos++
+            buffer = get_next_string(input_line, current_pos)
+            output = output buffer
+            current_pos += length(buffer)
             continue
         }
 
@@ -152,7 +121,8 @@ function remove_comments(input_line,      current_pos, current_char, token_val, 
     return trim_right(output)
 }
 
-function remove_trailing_comma(input_line,      current_pos, current_char, output, buffer, is_trailing) {
+function remove_trailing_comma(input_line,
+        current_pos, current_char, output, buffer, next_array_result, is_array_closed) {
     output = ""
     current_pos = 1
 
@@ -169,44 +139,14 @@ function remove_trailing_comma(input_line,      current_pos, current_char, outpu
             output = output buffer
             current_pos += length(buffer) - 1
 
-        # trailing comma handling
-        } else if (current_char == ",") {
-            #print "handle trailing , start"
-            is_trailing = 0
-            buffer = ","
-
-            current_pos++
-            while (current_pos <= length(input_line)) {
-                current_char = get_current_char(input_line, current_pos)
-                buffer = buffer current_char
-
-                # end of array
-                if (current_char == "]") {
-                    is_trailing = 1
-                    break
-                # other chars than space, means no trailing comma
-                } else if (current_char != " ") {
-                    break
-                }
-
-                current_pos++
-            }
-            if (is_trailing) {
-                gsub(/^,]/, "]", buffer)
-                gsub(/^, +]/, " ]", buffer)
-            # if something read
-            } else if (buffer != ",") {
-                # we need to get one char back, because we red
-                # char e.g. " which isn'\''t processed correctly e.g. as string start
-                buffer = substr(buffer, 1, length(buffer) - 1)
-                current_pos--
-            }
+        # array handling
+        } else if (current_char == "[") {
+            next_array_result = get_next_array(input_line, current_pos)
+            buffer = next_array_result[0]
+            is_array_closed = next_array_result[1]
 
             output = output buffer
-
-            # cleanup
-            buffer = ""
-            is_trailing = 0
+            current_pos += length(buffer) - 1
 
         # other char
         } else {
@@ -217,7 +157,38 @@ function remove_trailing_comma(input_line,      current_pos, current_char, outpu
         current_pos++
     }
 
+    in_array
     return trim_right(output)
+}
+
+function get_next_array(input_line, current_pos,        current_char, buffer, is_closed) {
+    current_char = get_current_char(input_line, current_pos)
+    buffer = current_char
+
+    is_closed = 0
+    current_pos++;
+    while (current_pos <= length(input_line)) {
+        # string
+        if (current_char == "\"") {
+            buffer = get_next_string(input_line, current_pos)
+            output = output buffer
+            current_pos += length(buffer)
+        } else if (current_char == "]") {
+            is_closed = 1
+            current_char = get_current_char(input_line, ++current_pos)
+            buffer = buffer current_char
+            break;
+        }
+    }
+
+    if (is_closed) {
+        gsub(/, +]$/, "]", buffer)
+        gsub(/,]$/, "]", buffer)
+    } else {
+        gsub(/, *$/, ",", buffer)
+    }
+
+    return [buffer, is_closed]
 }
 
 # get next json string from current line and position
@@ -266,13 +237,14 @@ main() {
 _tests() {
     local result_status=1
 
-    local json_orig=\""arrayProp\": [ 0, 1, \"test\", ]"
-    local json_expected=\""arrayProp\": [ 0, 1, \"test\" ]"
+    local json_orig="\"arrayProp\": [ 0, 1, \"test\", ]"
+    local json_expected="\"arrayProp\": [ 0, 1, \"test\" ]"
     local json_result=$(main <<< "$json_orig")
     #echo -e "original: $json_orig\nexpected: $json_expected\nresult: $json_result"
     local message="test trailing comma no. 1"
     [ "$json_expected" = "$json_result" ] && echo "$message OK" \
         || { result_status=0; echo "$message FAILED"; }
+    return
 #===========
     json_orig="[ 0, 1, \"test\",] "
     json_expected="[ 0, 1, \"test\"]"
@@ -368,7 +340,25 @@ JSONC
     [ "$json_expected" = "$json_result" ] && echo "$message OK" \
         || { result_status=0; echo "$message FAILED"; }
 #===========
-    message="integration test no. 1"
+    message="test multi line comment in string"
+    json_orig=$(cat <<JSONC
+{
+    "prop1": "test\"with escape and /* multi line comment */ inside string" // after line comment
+}
+JSONC
+)
+
+    json_expected=$(cat <<JSONC
+{
+    "prop1": "test\"with escape and /* multi line comment */ inside string"
+}
+JSONC
+)
+    json_result=$(main <<< "$json_orig")
+    [ "$json_expected" = "$json_result" ] && echo "$message OK" \
+        || { result_status=0; echo "$message FAILED"; }
+#===========
+    message="test integration test no. 1"
     json_orig=$(cat <<JSONC
 {
     "prop1": "prop1Value"
@@ -434,5 +424,6 @@ JSONC
     [ "$json_expected" = "$json_result" ] && echo "$message OK" \
         || { result_status=0; echo "$message FAILED"; }
 }
+
 _tests
 
