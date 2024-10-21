@@ -16,7 +16,9 @@ strip_jsonc_specific_chars() {
 '
 BEGIN {
     In_multi_line_comment = 0
-    In_array = 0
+    # contains array over multiple lines
+    Multi_line_array["content"] = ""
+    Multi_line_array["is_open"] = 0
 }
 
 /^[[:blank:]]*\/\*/ {
@@ -49,11 +51,16 @@ In_multi_line_comment == 1 {
 }
 {
     $0 = remove_comments($0)
-    print remove_trailing_comma($0)
+    $0 = remove_trailing_comma($0)
+    if (Multi_line_array["is_open"]) {
+        # do not trim if multi line is open
+        printf($0)
+    } else {
+        printf(trim_right($0), "\n")
+    }
 }
 
 function remove_comments(input_line,      current_pos, current_char, buffer, token_val, output) {
-
     output = ""
     # all awk string starts on index 1
     current_pos = 1
@@ -130,13 +137,20 @@ function remove_trailing_comma(input_line,      current_pos, current_char, outpu
 
     while (current_pos <= length(input_line)) {
         current_char = get_current_char(input_line, current_pos)
-        print "current_char_main: " current_char
+        # printf("rem. traling comma: char: %s", current_char)
 
-        # first handle if we are in array context
-        if (In_array) {
+        # we are in array context from previous line, handle first
+        if (Multi_line_array["is_open"]) {
             buffer = get_next_array(input_line, current_pos)
-            output = output buffer
             current_pos += length(buffer) - 1
+
+            if (Multi_line_array["is_open"]) {
+                Multi_line_array["content"] = Multi_line_array["content"] buffer "\n"
+            } else {
+                buffer = Multi_line_array["content"] buffer
+                Multi_line_array["content"] = ""
+                output = output remove_trailing_comma_from_arr(buffer)
+            }
 
         # string e.g. "some string input with escape \" rest of string"
         } else if (current_char == "\"") {
@@ -147,9 +161,19 @@ function remove_trailing_comma(input_line,      current_pos, current_char, outpu
 
         # array handling in current context
         } else if (current_char == "[") {
+            print "array start"
             buffer = get_next_array(input_line, current_pos)
             current_pos += length(buffer) - 1
-            output = output remove_trailing_comma_from_arr(buffer)
+
+            if (Multi_line_array["is_open"]) {
+                Multi_line_array["content"] = buffer "\n"
+            } else {
+                if (Multi_line_array["content"]) {
+                    buffer = Multi_line_array["content"] buffer
+                    Multi_line_array["content"] = ""
+                }
+                output = output remove_trailing_comma_from_arr(buffer)
+            }
 
         # other char
         } else {
@@ -160,17 +184,17 @@ function remove_trailing_comma(input_line,      current_pos, current_char, outpu
         current_pos++
     }
 
-    return trim_right(output)
+    return output
 }
 
 # get next array string
-# sets In_array as true if array is not closed till the end of line
-function get_next_array(input_line, current_pos,        current_char, output, buffer) {
-    In_array = 1
+# sets Multi_line_array if array is not closed till the end of line
+function get_next_array(input_line, current_pos,    current_char, output, buffer) {
 
     while (current_pos <= length(input_line)) {
+        Multi_line_array["is_open"] = 1
         current_char = get_current_char(input_line, current_pos)
-        print "current char: " current_char
+        #print "next arr current char: " current_char
 
         # string in array
         if (current_char == "\"") {
@@ -181,7 +205,7 @@ function get_next_array(input_line, current_pos,        current_char, output, bu
         # end of array
         } else if (current_char == "]") {
             output = output current_char
-            In_array = 0
+            Multi_line_array["is_open"] = 0
             break;
 
         # another char
@@ -192,13 +216,13 @@ function get_next_array(input_line, current_pos,        current_char, output, bu
         current_pos++
     }
 
-    # do not modify returned array, always preserve original length
+    # do not modify returned array string, always preserve original length
     # because we calc the positon according length
     return output
 }
 
 function remove_trailing_comma_from_arr(str) {
-    gsub(/, +]$/, " ]", str)
+    gsub(/,[[:space:]]+]$/, " ]", str)
     gsub(/,]$/, "]", str)
     return str
 }
@@ -261,15 +285,15 @@ _tests() {
     local message="test trailing comma no. 1"
     [ "$json_expected" = "$json_result" ] && echo "$message OK" \
         || { result_status=0; echo "$message FAILED"; }
-    return
 #===========
+    message="test trailing comma no. 2"
     json_orig="[ 0, 1, \"test\",] "
     json_expected="[ 0, 1, \"test\"]"
     json_result=$(main <<< "$json_orig")
-    message="test trailing comma no. 2"
     [ "$json_expected" = "$json_result" ] && echo "$message OK" \
         || { result_status=0; echo "$message FAILED"; }
 #===========
+    message="test trailing comma no. 3"
     json_orig=$(cat <<JSONC
 "prop1": [ "arrval1", "arrVal2", 12,
     "test",
@@ -280,15 +304,15 @@ JSONC
     local json_expected=$(cat <<JSONC
 "prop1": [ "arrval1", "arrVal2", 12,
     "test",
-    null,
+    null
 ],
 JSONC
 )
     json_result=$(main <<< "$json_orig")
-    message="test trailing comma no. 2"
     [ "$json_expected" = "$json_result" ] && echo "$message OK" \
         || { result_status=0; echo "$message FAILED"; }
 #===========
+    message="test trailing comma no. 4"
     json_orig=$(cat <<JSONC
 {
     "prop1": [ arrval1, "arrVal2", null,
@@ -310,7 +334,6 @@ JSONC
 JSONC
 )
     json_result=$(main <<< "$json_orig")
-    message="test trailing comma no. 4"
     [ "$json_expected" = "$json_result" ] && echo "$message OK" \
         || { result_status=0; echo "$message FAILED"; }
 #===========
@@ -443,15 +466,29 @@ JSONC
 }
 
 _test_one() {
-    local json_orig="\"arrayProp\": [ 0, 1, \"test\", ]"
-    local json_expected="\"arrayProp\": [ 0, 1, \"test\" ]"
-    local json_result=$(main <<< "$json_orig")
+    json_orig=$(cat <<JSONC
+"prop1": [ "arrval1", "arrVal2", 12,
+    "test",
+    null,
+],
+JSONC
+)
+    json_expected=$(cat <<JSONC
+"prop1": [ "arrval1", "arrVal2", 12,
+    "test",
+    null
+],
+JSONC
+)
 
     echo "original: $json_orig"; echo "expected: $json_expected"
-    echo "result: $json_result"
+    main <<< "$json_orig"
+    return
+    json_result=$(main <<< "$json_orig")
+    echo "result:  $json_result"
 
-    [ "$json_expected" = "$json_result" ] && echo "$message OK" \
-        || { result_status=0; echo "$message FAILED"; }
+    [ "$json_expected" = "$json_result" ] && echo "test OK" \
+        || { result_status=0; echo "test FAILED"; }
 }
 
 # _tests
