@@ -2,12 +2,18 @@
 # removes
 set -euo pipefail
 
+# remove line or multi line comments on single line
+#   // line comment on single line
+#   /* multi line comment on single line */
 strip_alone_line_comments() {
     sed -e "/^[[:blank:]]*\/\//d" -e "/^[[:blank:]]*\/\*.*\*\/[[:blank:]]*$/d"
 }
 
+# removing trailing command with simple :-) sed
+# doesnt bothersoe
+# todo: try to replace with json string based scanner of whole json string
+# stdin - line stream of jsonc file
 strip_trailing_commas() {
-
     sed -e '
 # sets a label named "a"
 :a
@@ -70,15 +76,9 @@ In_multi_line_comment == 1 {
     }
 
 }
+
 {
-    print $0 = remove_comments($0)
-    #$0 = (remove_trailing_comma($0))
-    #if (Multi_line_array["is_open"]) {
-    #    # do not trim if multi line is open
-    #    printf($0)
-    #} else {
-    #    printf(trim_right($0), "\n")
-    #}
+    print remove_comments($0)
 }
 
 function remove_comments(input_line,      current_pos, current_char, buffer, token_val, output) {
@@ -211,7 +211,6 @@ function remove_trailing_comma(input_line,      current_pos, current_char, outpu
 # get next array string
 # sets Multi_line_array if array is not closed till the end of line
 function get_next_array(input_line, current_pos,    current_char, output, buffer) {
-
     while (current_pos <= length(input_line)) {
         Multi_line_array["is_open"] = 1
         current_char = get_current_char(input_line, current_pos)
@@ -292,232 +291,49 @@ function quote(str, quoting_char) {
 '
 }
 
-main() {
+convert() {
     strip_alone_line_comments | strip_jsonc_specific_chars | strip_trailing_commas
 }
 
-_tests() {
-    local result_status=1
-
-    local json_orig="\"arrayProp\": [ 0, 1, \"test\", ]"
-    local json_expected="\"arrayProp\": [ 0, 1, \"test\" ]"
-    local json_result=$(main <<< "$json_orig")
-    #echo -e "original: $json_orig\nexpected: $json_expected\nresult: $json_result"
-    local message="test trailing comma no. 1"
-    [ "$json_expected" = "$json_result" ] && echo "$message OK" \
-        || { result_status=0; echo "$message FAILED"; }
-#===========
-    message="test trailing comma no. 2"
-    json_orig="[ 0, 1, \"test\",] "
-    json_expected="[ 0, 1, \"test\" ]"
-    json_result=$(main <<< "$json_orig")
-    [ "$json_expected" = "$json_result" ] && echo "$message OK" \
-        || { result_status=0; echo "$message FAILED"; }
-#===========
-    message="test trailing comma no. 3"
-    json_orig=$(cat <<JSONC
-"prop1": [ "arrval1", "arrVal2", 12,
-    "test",
-    null,
-    ],
-JSONC
-)
-    json_expected=$(cat <<JSONC
-"prop1": [ "arrval1", "arrVal2", 12,
-    "test",
-    null
-    ],
-JSONC
-)
-    json_result=$(main <<< "$json_orig")
-    [ "$json_expected" = "$json_result" ] && echo "$message OK" \
-        || { result_status=0; echo "$message FAILED"; }
-#===========
-    message="test trailing comma no. 4"
-    json_orig=$(cat <<JSONC
-{
-    "prop1": [
-       "arrval1", "arrVal2", null,
-        1234, "arraVal 3",
-    ],
-    "prop2": {
-        "prop21": null,
-        "prop22": null,
-    }
-}
-JSONC
-)
-    json_expected=$(cat <<JSONC
-{
-    "prop1": [
-       "arrval1", "arrVal2", null,
-        1234, "arraVal 3"
-    ],
-    "prop2": {
-        "prop21": null,
-        "prop22": null
-    }
-}
-JSONC
-)
-    json_result=$(main <<< "$json_orig")
-    [ "$json_expected" = "$json_result" ] && echo "$message OK" \
-        || { result_status=0; echo "$message FAILED"; }
-#===========
-    json_orig=$(cat <<JSONC
-    "prop1": /* "inner comment // */ "prop1 value"
-JSONC
-)
-    json_expected="    \"prop1\":  \"prop1 value\""
-    json_result=$(main <<< "$json_orig")
-    message="test multi line comment no. 1"
-    [ "$json_expected" = "$json_result" ] && echo "$message OK" \
-        || { result_status=0; echo "$message FAILED"; }
-#===========
-    message="test pure string with quotes"
-    json_orig=\""pure JSON string with quotes \""
-    json_expected="$json_orig"
-    json_result=$(main <<< "$json_orig")
-    message="test pure string with quotes"
-    [ "$json_expected" = "$json_result" ] && echo "$message OK" \
-        || { result_status=0; echo "$message FAILED"; }
-#===========
-    message="test not correctly closed string"
-    json_orig="\"prop1\": \"unclosed string"
-    json_expected="$json_orig"
-    json_result=$(main <<< "$json_orig")
-    [ "$json_expected" = "$json_result" ] && echo "$message OK" \
-        || { result_status=0; echo "$message FAILED"; }
-#===========
-    message="test line comment in string, after json content"
-    json_orig=$(cat <<JSONC
-{
-    "prop1": "test\"with escape and // line comment start inside string" // after line comment
-}
-JSONC
-)
-
-    json_expected=$(cat <<JSONC
-{
-    "prop1": "test\"with escape and // line comment start inside string"
-}
-JSONC
-)
-    json_result=$(main <<< "$json_orig")
-    [ "$json_expected" = "$json_result" ] && echo "$message OK" \
-        || { result_status=0; echo "$message FAILED"; }
-#===========
-    message="test multi line comment in string"
-    json_orig=$(cat <<JSONC
-{
-    "prop1": "test\"with escape and /* multi line comment */ inside string" // after line comment
-}
-JSONC
-)
-
-    json_expected=$(cat <<JSONC
-{
-    "prop1": "test\"with escape and /* multi line comment */ inside string"
-}
-JSONC
-)
-    json_result=$(main <<< "$json_orig")
-    [ "$json_expected" = "$json_result" ] && echo "$message OK" \
-        || { result_status=0; echo "$message FAILED"; }
-#===========
-    message="test integration test no. 1"
-    json_orig=$(cat <<JSONC
-{
-    "prop1": "prop1Value",
-    // alone line comment
-    /* alone multi line comment */
-    "prop2": { "prop21": "prop21Value" }
-
-    "prop3": {
-        "prop31": {
-            "prop311": null,
-            "prop312: [ arr1, arr2,
-                arr3,
-                arr4,
-            ]
-        }
-        /** comments some part of json, uncomment later
-        "prop31Comment": {
-            "prop311": null,
-            "prop312: 22
-        }
-        */
-        "prop32": {
-            "prop32": "test"
-            "prop312": 22,
-            "prop313": true
-        }
-    }
-    /* "prop4": {
-       } //
-    */ "prop4": { // test
-            "prop41": "value"
-        }
-}
-JSONC
-)
-
-    json_expected=$(cat <<JSONC
-{
-    "prop1": "prop1Value",
-    "prop2": { "prop21": "prop21Value" }
-
-    "prop3": {
-        "prop31": {
-            "prop311": null,
-            "prop312: [ arr1, arr2,
-                arr3,
-                arr4
-            ]
-        }
-        "prop32": {
-            "prop32": "test"
-            "prop312": 22,
-            "prop313": true
-        }
-    }
- "prop4": {
-            "prop41": "value"
-        }
-}
-JSONC
-)
-    json_result=$(main <<< "$json_orig")
-    [ "$json_expected" = "$json_result" ] && echo "$message OK" \
-        || { result_status=0; echo "$message FAILED"; }
+print_help() {
+    echo "help"
 }
 
-_test_one() {
-    json_orig=$(cat <<JSONC
-"prop1": [ "arrval1", "arrVal2", 12,
-    "test",
-    null,
-    ],
-JSONC
-)
-    json_expected=$(cat <<JSONC
-"prop1": [ "arrval1", "arrVal2", 12,
-    "test",
-    null
-    ],
-JSONC
-)
+main() {
+    local options=$(getopt -o "h,f:" --long "help,aslib" -n 'jsonc2json options' -- "$@")
+    set -- $options
 
-    echo "original: $json_orig"; echo "expected: $json_expected"
-    main <<< "$json_orig"
-    return
-    json_result=$(main <<< "$json_orig")
-    echo "result:  $json_result"
+    local input_file=""
+    while true; do
+        case "$1" in
+            -h | --help)
+                print_help
+                return
+                ;;
+            -f)
+                input_file="${2//\'/}"
+                [ ! -f "$input_file" ] \
+                    && echo "error: file \"$input_file\" doesn't exist" \
+                    && return 1
+                shift 2
+                ;;
+            # use as library via "source" command
+            --aslib)
+                return
+                ;;
+            --)
+                shift
+                break
+                ;;
+        esac
+    done
 
-    [ "$json_expected" = "$json_result" ] && echo "test OK" \
-        || { result_status=0; echo "test FAILED"; }
+    if [ -n "$input_file" ]; then
+        convert < "$input_file"
+    else
+        convert
+    fi
 }
 
-_tests
-#_test_one
+main "$@"
 
