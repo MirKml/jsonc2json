@@ -69,7 +69,7 @@ In_multi_line_comment == 1 {
     }
 
     # remove everything from start to the end of comment
-    # save it as current line a go to the next awk line pattern processing
+    # save it as current line - $0 - a go to the next awk line pattern processing
     comment_position = index($0, "*/")
     if (comment_position > 0) {
         $0 = substr($0, comment_position + 2)
