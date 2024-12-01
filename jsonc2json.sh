@@ -9,8 +9,10 @@ strip_alone_line_comments() {
     sed -e "/^[[:blank:]]*\/\//d" -e "/^[[:blank:]]*\/\*.*\*\/[[:blank:]]*$/d"
 }
 
-# removing trailing command with simple :-) sed
-# doesnt bothersoe
+# removing trailing commas with simple :-) sed
+# doesn't bother if trailing comma is inside string or not
+# because this case i really rare, maybe when json contains some parts for code generation
+#
 # todo: try to replace with json string based scanner of whole json string
 # stdin - line stream of jsonc file
 strip_trailing_commas() {
