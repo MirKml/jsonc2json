@@ -76,7 +76,6 @@ In_multi_line_comment == 1 {
         $0 = trim_right($0)
         In_multi_line_comment = 0
     }
-
 }
 
 {
@@ -122,7 +121,7 @@ function remove_comments(input_line,      current_pos, current_char, buffer, tok
                 while (++current_pos <= length(input_line)) {
                     current_char = get_current_char(input_line, current_pos)
                     token_val = token_val current_char
-                    # if latest 2 string in token are */ - closing comment
+                    # if latest 2 chars in token are */ - closing comment
                     if (substr(token_val, length(token_val) - 1) == "*/") {
                         # print "found multiline comment: " token_val
                         # next input char iteration
