@@ -150,7 +150,55 @@ function remove_comments(input_line,      current_pos, current_char, buffer, tok
     return trim_right(output)
 }
 
-function remove_trailing_comma(input_line,      current_pos, current_char, output, buffer, next_array_result) {
+function remove_trailing_comma(input_line,      current_pos, current_char, output, buffer) {
+    current_pos = 1
+
+    while (current_pos <= length(input_line)) {
+        current_char = get_current_char(input_line, current_pos)
+
+        # string e.g. "some string input with escape \" { test, } ..."
+        if (current_char == "\"") {
+            buffer = get_next_string(input_line, current_pos)
+            output = output buffer
+            current_pos += length(buffer)
+            continue
+        }
+
+        if (current_char == ",") {
+            buffer = current_char
+            while (++current_pos <= length(input_line)) {
+                current_char = get_current_char(input_line, current_pos)
+                if (current_char == " " || current_char == "\t") {
+                    buffer = buffer current_char
+                    continue
+                } else if (is_end_trailing_comma_block(current_char)) {
+                    buffer = current_char
+                    break
+                } else {
+                    buffer = buffer current_char
+                    break
+                }
+            }
+            # break, or end of line reached
+            if (!is_end_trailing_comma_block(current_char)) {
+                Trailing_comma["is_open"] = true
+                Trailing_comma["buffer"] = buffer
+                return
+            }
+            output = outbut buffer
+        }
+    }
+
+    # trim ending spaces
+    return trim_right(output)
+}
+
+
+function is_end_trailing_comma_block(char) {
+    return current_char == "]" || current_char == "}"
+}
+
+function remove_trailing_comma_old(input_line,      current_pos, current_char, output, buffer, next_array_result) {
     output = ""
     current_pos = 1
 
@@ -249,6 +297,7 @@ function remove_trailing_comma_from_arr(str) {
 }
 
 # get next json string from current line and position
+# json doesn't support real multi line string
 function get_next_string(input_line, current_pos,   current_char, buffer) {
     current_char = get_current_char(input_line, current_pos)
     buffer = current_char

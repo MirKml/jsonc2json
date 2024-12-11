@@ -3,7 +3,7 @@
     // alone line comment
     /* alone multi line comment */
     "prop2": { "prop21": "prop21Value" },
-
+    "prop22": { "prop21": "prop21Value", "prop22": true, },
     "prop3": {
         "prop31": {
             "prop311": null,
