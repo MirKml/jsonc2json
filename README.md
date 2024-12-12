@@ -1,5 +1,5 @@
 # jsonc2json.sh
-JSONC to JSON conversion utility in shell (bash)
+JSONC to JSON conversion utility in shell (bash with help of awk, sed), for shell
 
 ## Quick usage
 from command line - `./jsonc2json.sh < config.jsonc > config.json`
