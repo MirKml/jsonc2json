@@ -21,20 +21,31 @@ test_run() {
 
 load_lib() {
     local script_dir="$1"
-    source "$script_dir"/jsonc2json.sh --aslib
+    source "$script_dir/.."/jsonc2json.sh --aslib
 }
 
 debug_test() {
-    local script_dir=$(dirname $0)
     load_lib "$(dirname $0)"
 
-    local original_json="\"arrayProp\": [ 0, 1, \"test\", ]"
-    local expected_json="\"arrayProp\": [ 0, 1, \"test\" ]"
+    local original_json=$(cat <<JSONC
+"prop1": [ "arrval1", "arrVal2", 12,
+    "test",
+    null,
+    ],
+JSONC
+)
+    local expected_json=$(cat <<JSONC
+"prop1": [ "arrval1", "arrVal2", 12,
+    "test",
+    null
+    ],
+JSONC
+)
     echo -e "original: $original_json\nexpected: $expected_json\nresult:   \n"
-    $(convert <<< "$original_json")
+    convert <<< "$original_json"
 }
-#debug_test
-#exit
+debug_test
+exit
 
 all_tests() {
     load_lib "$(dirname $0)"
@@ -51,7 +62,7 @@ all_tests() {
 
     message="test trailing comma no. 2"
     original_json="[ 0, 1, \"test\",] "
-    expected_json="[ 0, 1, \"test\" ]"
+    expected_json="[ 0, 1, \"test\"]"
     if ! test_run "$original_json" "$expected_json" "$message"; then
         result_status=1
     fi
