@@ -80,9 +80,9 @@ In_multi_line_comment == 1 {
 {
     current_line = remove_comments($0)
     current_block = remove_trailing_comma(current_line)
-    #printf("current block: --%s--\n", current_block)
     # intentionally use printf, if there is trailing comma at the end of line
     # returned block are without eol
+    #printf("current block: --%s--\n", current_block)
     printf(current_block)
 }
 
@@ -156,12 +156,13 @@ function remove_comments(input_line,      current_pos, current_char, buffer, tok
 
 function remove_trailing_comma(input_line,      current_pos, current_char, output, buffer) {
     current_pos = 1
+    output = ""
+
     #print "rem. trailing comma: line" input_line
 
-    if (Trailing_comma["buffer"]) {
-        output = Trailing_comma["buffer"] "\n"
-    } else {
-        output = ""
+    if (Trailing_comma["buffer"] && !length(input_line)) {
+        #print "empty line in traling buffer, skip"
+        return
     }
 
     while (current_pos <= length(input_line)) {
@@ -169,15 +170,21 @@ function remove_trailing_comma(input_line,      current_pos, current_char, outpu
         #printf("rem. traling comma: pos: %s char: %s out: %s\n", current_pos, current_char, output)
 
         # string e.g. "some string input with escape \" { test, } ..."
-        if (current_char == "\"") {
+        if (!Trailing_comma["buffer"] && current_char == "\"") {
             buffer = get_next_string(input_line, current_pos)
             output = output buffer
             current_pos += length(buffer)
             continue
         }
 
-        if (current_char == ",") {
-            buffer = current_char
+        if (Trailing_comma["buffer"] || current_char == ",") {
+            if (Trailing_comma["buffer"]) {
+                buffer = Trailing_comma["buffer"] "\n"
+            } else {
+                buffer = ""
+            }
+            buffer = buffer current_char
+
             while (++current_pos <= length(input_line)) {
                 current_char = get_current_char(input_line, current_pos)
                 #print "rem. trailing comma: traling block: char:" current_char
@@ -193,8 +200,8 @@ function remove_trailing_comma(input_line,      current_pos, current_char, outpu
 
             if (is_end_trailing_comma_block(current_char)) {
                 #print "rem. trailing comma: end trailing, buffer:-" buffer "-"
-                gsub(/ +/, " ", buffer)
-                gsub(/\t+/, "\t", buffer)
+                #gsub(/ +$/, " ", buffer)
+                #gsub(/\t+$/, "\t", buffer)
                 gsub(/,/, "", buffer)
                 output = output buffer current_char
                 current_pos++
@@ -204,6 +211,7 @@ function remove_trailing_comma(input_line,      current_pos, current_char, outpu
             # end of line, trailing comma block is open
             if (current_pos > length(input_line)) {
                 if (!Trailing_comma["buffer"]) {
+                    #print "rem. trailing comma: saving buffer:" buffer
                     Trailing_comma["buffer"] = buffer
                 }
                 #print "rem. trailing comma: block is opened, return output without opened block"
@@ -213,6 +221,7 @@ function remove_trailing_comma(input_line,      current_pos, current_char, outpu
             # other char which breaks trailing comma block
             # process the character again
             #print "rem. trailing comma: " current_char " breaks block, process again"
+            Trailing_comma["buffer"] = ""
             output = output buffer
             continue
         }

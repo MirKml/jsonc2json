@@ -28,17 +28,29 @@ debug_test() {
     load_lib "$(dirname $0)"
 
     local original_json=$(cat <<JSONC
-"prop1": [ "arrval1", "arrVal2", 12,
-    "test",
-    null,
+{
+    "prop1": [
+       "arrval1", "arrVal2", null,
+        1234, "arraVal 3",
     ],
+    "prop2": {
+        "prop21": null,
+        "prop22": null,
+    }
+}
 JSONC
 )
     local expected_json=$(cat <<JSONC
-"prop1": [ "arrval1", "arrVal2", 12,
-    "test",
-    null
+{
+    "prop1": [
+       "arrval1", "arrVal2", null,
+        1234, "arraVal 3"
     ],
+    "prop2": {
+        "prop21": null,
+        "prop22": null
+    }
+}
 JSONC
 )
     echo -e "original: $original_json\nexpected: $expected_json\nresult:   \n"
@@ -81,7 +93,7 @@ JSONC
 "prop1": [ "arrval1", "arrVal2", 12,
     "test",
     null
-    ],
+ ]
 JSONC
 )
     if ! test_run "$original_json" "$expected_json" "$message"; then
