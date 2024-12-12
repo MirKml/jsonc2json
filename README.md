@@ -5,8 +5,8 @@ JSONC to JSON conversion utility in shell (bash with help of awk, sed), for shel
 from command line - `./jsonc2json.sh < config.jsonc > config.json`
 
 as bash library
-- loads the source script with `--aslib` option as library,
-- then use `convert` function with $1 parameter as JSONC source string
+- loads the source script with `--aslib` option as library
+- use `convert` function with $1 parameter as JSONC source string
 
 ```bash
 #!/usr/bin/env bash
