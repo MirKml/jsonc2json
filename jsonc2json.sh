@@ -1,5 +1,4 @@
 #!/usr/bin/env bash
-# removes
 set -euo pipefail
 
 # remove line or multi line comments on single line
@@ -60,6 +59,7 @@ BEGIN {
     next
 }
 
+# we are in multi-line comment
 # return all after multiline comment end - "*/"
 In_multi_line_comment == 1 {
     # no end of multi line comment found
@@ -78,8 +78,10 @@ In_multi_line_comment == 1 {
     }
 }
 
+# executed only if we aren't in multiline comment
 {
-    print remove_comments($0)
+    output = remove_comments($0)
+    print remove_trailing_comma(output)
 }
 
 function remove_comments(input_line,      current_pos, current_char, buffer, token_val, output) {
@@ -193,101 +195,8 @@ function remove_trailing_comma(input_line,      current_pos, current_char, outpu
     return trim_right(output)
 }
 
-
 function is_end_trailing_comma_block(char) {
-    return current_char == "]" || current_char == "}"
-}
-
-function remove_trailing_comma_old(input_line,      current_pos, current_char, output, buffer, next_array_result) {
-    output = ""
-    current_pos = 1
-
-    # print "line: " input_line
-    # print "length: " length(input_line)
-
-    while (current_pos <= length(input_line)) {
-        current_char = get_current_char(input_line, current_pos)
-        # printf("rem. traling comma: char: %s", current_char)
-
-        # we are in array context from previous line, handle first
-        if (Multi_line_array["is_open"]) {
-            buffer = get_next_array(input_line, current_pos)
-            current_pos += length(buffer) - 1
-
-            if (Multi_line_array["is_open"]) {
-                Multi_line_array["content"] = Multi_line_array["content"] buffer "\n"
-            } else {
-                buffer = Multi_line_array["content"] buffer
-                Multi_line_array["content"] = ""
-                output = output remove_trailing_comma_from_arr(buffer)
-            }
-
-        # string e.g. "some string input with escape \" rest of string"
-        } else if (current_char == "\"") {
-            buffer = get_next_string(input_line, current_pos)
-            output = output buffer
-            # -1 because already read current_char
-            current_pos += length(buffer) - 1
-
-        # array handling in current context
-        } else if (current_char == "[") {
-            print "array start"
-            buffer = get_next_array(input_line, current_pos)
-            current_pos += length(buffer) - 1
-
-            if (Multi_line_array["is_open"]) {
-                Multi_line_array["content"] = buffer "\n"
-            } else {
-                if (Multi_line_array["content"]) {
-                    buffer = Multi_line_array["content"] buffer
-                    Multi_line_array["content"] = ""
-                }
-                output = output remove_trailing_comma_from_arr(buffer)
-            }
-
-        # other char
-        } else {
-            # next input char iteration
-            output = output current_char
-        }
-
-        current_pos++
-    }
-
-    return output
-}
-
-# get next array string
-# sets Multi_line_array if array is not closed till the end of line
-function get_next_array(input_line, current_pos,    current_char, output, buffer) {
-    while (current_pos <= length(input_line)) {
-        Multi_line_array["is_open"] = 1
-        current_char = get_current_char(input_line, current_pos)
-        #print "next arr current char: " current_char
-
-        # string in array
-        if (current_char == "\"") {
-            buffer = get_next_string(input_line, current_pos)
-            output = output buffer
-            current_pos += length(buffer) - 1
-
-        # end of array
-        } else if (current_char == "]") {
-            output = output current_char
-            Multi_line_array["is_open"] = 0
-            break;
-
-        # another char
-        } else {
-            output = output current_char
-        }
-
-        current_pos++
-    }
-
-    # do not modify returned array string, always preserve original length
-    # because we calc the positon according length
-    return output
+     #return current_char == "]" || current_char == "}"
 }
 
 function remove_trailing_comma_from_arr(str) {
