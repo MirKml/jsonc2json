@@ -45,7 +45,7 @@ JSONC
 {
     "prop1": "prop1Value",
     "prop22": [
-        true, false, null,
+         true, false, null,
         "test, }"
     ],
     "prop23": {
@@ -57,8 +57,8 @@ JSONC
     echo -e "original: $original_json\nexpected: $expected_json\nresult:   \n"
     convert <<< "$original_json"
 }
-debug_test
-exit
+#debug_test
+#exit
 
 all_tests() {
     load_lib "$(dirname $0)"
@@ -185,7 +185,7 @@ JSONC
 {
     "prop1": "prop1Value",
     "prop22": [
-        true, false, null,
+         true, false, null,
         "test, }"
     ],
     "prop23": {

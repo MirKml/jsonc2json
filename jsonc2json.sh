@@ -8,11 +8,13 @@ strip_alone_line_comments() {
     sed -e "/^[[:blank:]]*\/\//d" -e "/^[[:blank:]]*\/\*.*\*\/[[:blank:]]*$/d"
 }
 
+# just for learning purposed
 # removing trailing commas with simple :-) sed
-# doesn't bother if trailing comma is inside string or not
-# because this case i really rare, maybe when json contains some parts for code generation
+# drawback/bug: remove trailing commas from json string
+# e.g. { "prop": "val = { val , }" } => { "prop": "val = { val }" }
 #
-# todo: try to replace with json string based scanner of whole json string
+# rare case, but can be there is some javascript code inside json values
+# currently isn't used anymore, implemented in awk
 # stdin - line stream of jsonc file
 strip_trailing_commas() {
     sed -e '
@@ -37,7 +39,7 @@ s/,[[:space:]]*\([]}]\)/ \1/g;'
 # removes
 # - single line comments
 # - multiple line comments
-# - trailing commas in arrays
+# - trailing commas
 # all these can be mixed inside with other json like chars
 strip_jsonc_specific_chars() {
     awk \
@@ -79,11 +81,16 @@ In_multi_line_comment == 1 {
 # notice (be aware of single quite in single quote in previous comment, because we are generally in bash :-))
 {
     current_line = remove_comments($0)
+
+    Traling_comma_debug = 0
     current_block = remove_trailing_comma(current_line)
     # intentionally use printf, if there is trailing comma at the end of line
     # returned block are without eol
-    #printf("current block: --%s--\n", current_block)
-    printf(current_block)
+    if (Traling_comma_debug) {
+        printf("rem. trailing comma: current block: --%s--\n", current_block)
+    } else {
+        printf(current_block)
+    }
 }
 
 function remove_comments(input_line,      current_pos, current_char, buffer, token_val, output) {
@@ -158,16 +165,16 @@ function remove_trailing_comma(input_line,      current_pos, current_char, outpu
     current_pos = 1
     output = ""
 
-    #print "rem. trailing comma: line:" input_line
+    trailing_comma_dbg("line:" input_line)
 
     if (Trailing_comma["buffer"] && !length(input_line)) {
-        #print "empty line in trailing buffer, skip"
         return
     }
 
     while (current_pos <= length(input_line)) {
         current_char = get_current_char(input_line, current_pos)
-        #printf("rem. trailing comma: pos: %s char: %s out: %s\n", current_pos, current_char, output)
+
+        trailing_comma_dbg(sprintf("pos: %s char: %s out: %s", current_pos, current_char, output))
 
         # string e.g. "some string input with escape \" { test, } ..."
         if (!Trailing_comma["buffer"] && current_char == "\"") {
@@ -189,19 +196,19 @@ function remove_trailing_comma(input_line,      current_pos, current_char, outpu
 
             while (++current_pos <= length(input_line)) {
                 current_char = get_current_char(input_line, current_pos)
-                #print "rem. trailing comma: trailing block: char:" current_char
+                trailing_comma_dbg("trailing block char:" current_char)
                 if (current_char == " " || current_char == "\t") {
                     buffer = buffer current_char
                     continue
-                } else if (is_end_trailing_comma_block(current_char)) {
+                } else if (is_trailing_comma_buffer_end(current_char)) {
                     break
                 } else {
                     break
                 }
             }
 
-            if (is_end_trailing_comma_block(current_char)) {
-                #print "rem. trailing comma: end trailing, buffer:-" buffer "-"
+            if (is_trailing_comma_buffer_end(current_char)) {
+                trailing_comma_dbg("end trailing buffer:-" buffer "-")
                 gsub(/,/, "", buffer)
                 output = output buffer current_char
                 Trailing_comma["buffer"] = ""
@@ -211,34 +218,37 @@ function remove_trailing_comma(input_line,      current_pos, current_char, outpu
 
             # end of line, trailing comma block is open
             if (current_pos > length(input_line)) {
-                #print "rem. trailing comma: saving buffer:" buffer
+                trailing_comma_dbg("saving buffer:" buffer)
                 Trailing_comma["buffer"] = buffer
-                #print "rem. trailing comma: block is opened, return output without opened block"
+                trailing_comma_dbg("buffer is opened, returns only output")
                 return trim_right(output)
             }
 
             # other char which breaks trailing comma block
             # process current character again
-            #print "rem. trailing comma: " current_char " breaks block, process again"
+            trailing_comma_dbg("char " current_char " breaks buffer, process again")
             Trailing_comma["buffer"] = ""
             output = output buffer
             continue
         }
 
         output = output current_char
-        if (Trailing_comma["buffer"]) {
-            Trailing_comma["buffer"] = ""
-        }
+        Trailing_comma["buffer"] = ""
         current_pos++
     }
 
-    #print "rem. trailing comma: output:" output
     # add eol, because printf is used for output and there is no opened trailing comma block
     return trim_right(output) "\n"
 }
 
-function is_end_trailing_comma_block(char) {
+function is_trailing_comma_buffer_end(char) {
      return char == "]" || char == "}"
+}
+
+function trailing_comma_dbg(str) {
+    if (Traling_comma_debug) {
+        print "rem. trailing comma: " str
+    }
 }
 
 # get next json string from current line and position
