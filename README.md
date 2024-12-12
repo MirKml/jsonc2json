@@ -2,7 +2,7 @@
 JSONC to JSON conversion utility in shell (bash)
 
 It converts JSONC file - JSON with comments - into JSON file. This format is more appropriate for human-readable
-configurations, then pure JSON. In pure JSON, comments aren't allowed.
+configurations rather then pure JSON. In pure JSON, comments aren't allowed.
 
 There are many tools with same purpose, but mostly in JavaScript, Golang. I couldn't find anything for simple usage
 with pure bash environment. So I tried to write this one.
@@ -69,7 +69,7 @@ JSONC config.jsonc file
 }
 ```
 
-can be converted into JSON config.json file with command `cat config.jsonc | ./jsonc2json.sh > config.json` command
+can be converted into JSON config.json file with command `cat config.jsonc | ./jsonc2json.sh > config.json`
 ```json
 {
     "prop1": "prop1Value",
