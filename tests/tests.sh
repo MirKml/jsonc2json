@@ -29,26 +29,27 @@ debug_test() {
 
     local original_json=$(cat <<JSONC
 {
-    "prop1": [
-       "arrval1", "arrVal2", null,
-        1234, "arraVal 3",
+    "prop1": "prop1Value",
+    "prop22": [
+         true, false, null,
+        "test, }",
     ],
-    "prop2": {
-        "prop21": null,
-        "prop22": null,
-    }
+    "prop23": {
+        "prop24": "string with , ] inside",
+    },
 }
 JSONC
 )
+
     local expected_json=$(cat <<JSONC
 {
-    "prop1": [
-       "arrval1", "arrVal2", null,
-        1234, "arraVal 3"
+    "prop1": "prop1Value",
+    "prop22": [
+        true, false, null,
+        "test, }"
     ],
-    "prop2": {
-        "prop21": null,
-        "prop22": null
+    "prop23": {
+        "prop24": "string with , ] inside"
     }
 }
 JSONC
@@ -93,7 +94,7 @@ JSONC
 "prop1": [ "arrval1", "arrVal2", 12,
     "test",
     null
- ]
+    ]
 JSONC
 )
     if ! test_run "$original_json" "$expected_json" "$message"; then
@@ -131,6 +132,96 @@ JSONC
     if ! test_run "$original_json" "$expected_json" "$message"; then
         result_status=1
     fi
+#===========
+
+    message="test trailing comma no. 5"
+    original_json=$(cat <<JSONC
+[
+    "arrval1", "arrVal2", null,
+    1234, "arraVal 3",
+    {
+        "test1": true,
+        "test2": false,
+    },
+
+
+
+],
+JSONC
+)
+    expected_json=$(cat <<JSONC
+[
+    "arrval1", "arrVal2", null,
+    1234, "arraVal 3",
+    {
+        "test1": true,
+        "test2": false
+    }
+]
+JSONC
+)
+    if ! test_run "$original_json" "$expected_json" "$message"; then
+        result_status=1
+    fi
+
+#===========
+
+    message="test trailing comma no. 6"
+    original_json=$(cat <<JSONC
+{
+    "prop1": "prop1Value",
+    "prop22": [
+         true, false, null,
+        "test, }",
+    ],
+    "prop23": {
+        "prop24": "string with , ] inside",
+    },
+}
+JSONC
+)
+
+    expected_json=$(cat <<JSONC
+{
+    "prop1": "prop1Value",
+    "prop22": [
+        true, false, null,
+        "test, }"
+    ],
+    "prop23": {
+        "prop24": "string with , ] inside"
+    }
+}
+JSONC
+)
+    if ! test_run "$original_json" "$expected_json" "$message"; then
+        result_status=1
+    fi
+
+#===========
+
+    message="test trailing comma no. 7"
+    original_json=$(cat <<JSONC
+{
+    "prop1": "prop1Value",
+    "prop22": { "prop21": "prop21Value", "prop22": true, },
+    "prop22": { "prop21": "prop21Value", "prop22": [ true, "test", ], }
+}
+JSONC
+)
+
+    expected_json=$(cat <<JSONC
+{
+    "prop1": "prop1Value",
+    "prop22": { "prop21": "prop21Value", "prop22": true },
+    "prop22": { "prop21": "prop21Value", "prop22": [ true, "test" ] }
+}
+JSONC
+)
+    if ! test_run "$original_json" "$expected_json" "$message"; then
+        result_status=1
+    fi
+
 #===========
 
     message="test multi line comment no. 1"
