@@ -10,9 +10,9 @@ It's implemented in mostly (g)awk and bash, sed without any other dependencies.
 It's useful anywhere bash is used frequently e.g. administration task, configurations, devops tooling, CI pipelines.
 
 Supported features
- - single-line comments
- - multi-line comments
- - trailing commas
+ - single-line comments // some commnet
+ - multi-line comments /* many lines */
+ - trailing commas for objects, arrays `{ "prop": [ "item1", "item2", ], }` => `{ "prop": [ "item1", "item2" ] }`
 
 All these are removed during conversion.
 
@@ -30,5 +30,40 @@ very favourable for such task.
 JSONC file
 
 ```jsonc
+{
+    // first property with value
+    "prop1": "prop1Value",
+    /* second property
+       with another values */
+    "prop2": { "prop21": "prop21Value" }
 
+    "prop3": {
+        "prop31": {
+             /** maybe this is more readable
+              *  multi-line comment
+              */
+            "prop311": null,
+            "prop312: [ arr1, arr2,
+                arr3,
+                arr4, // trailing comma
+            ], // another trailing comma
+        },
+        /* comment some part of json, useful for configuration development
+        "prop31Comment": {
+            "prop311": null,
+            "prop312: 22
+        }
+        */
+        "prop32": {
+            "prop32": "test"
+            "prop312": 22,
+            "prop313": true
+        }
+    },
+    /* "prop4": {
+       } // single line inside multi-line
+    start property after multi-line */ "prop4": {
+            "prop41": "value"
+        },
+}
 ```
