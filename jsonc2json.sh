@@ -44,9 +44,6 @@ strip_jsonc_specific_chars() {
 '
 BEGIN {
     In_multi_line_comment = 0
-    # contains array over multiple lines
-    Multi_line_array["content"] = ""
-    Multi_line_array["is_open"] = 0
 }
 
 /^[[:blank:]]*\/\*/ {
@@ -78,10 +75,12 @@ In_multi_line_comment == 1 {
     }
 }
 
-# executed only if we aren't in multiline comment
+# executed only if we aren'"'"'t in multiline comment
+# notice (be aware of single quite in single quote in previous comment, because we are generally in bash :-))
 {
-    output = remove_comments($0)
-    print remove_trailing_comma(output)
+    current_line = remove_comments($0)
+    current_block = remove_trailing_comma(current_line)
+    printf("current block: --%s--\n", current_block)
 }
 
 function remove_comments(input_line,      current_pos, current_char, buffer, token_val, output) {
@@ -154,9 +153,17 @@ function remove_comments(input_line,      current_pos, current_char, buffer, tok
 
 function remove_trailing_comma(input_line,      current_pos, current_char, output, buffer) {
     current_pos = 1
+    #print "rem. trailing comma: line" input_line
+
+    if (Trailing_comma["buffer"]) {
+        output = Trailing_comma["buffer"] "\n"
+    } else {
+        output = ""
+    }
 
     while (current_pos <= length(input_line)) {
         current_char = get_current_char(input_line, current_pos)
+        #printf("rem. traling comma: pos: %s char: %s out: %s\n", current_pos, current_char, output)
 
         # string e.g. "some string input with escape \" { test, } ..."
         if (current_char == "\"") {
@@ -170,43 +177,62 @@ function remove_trailing_comma(input_line,      current_pos, current_char, outpu
             buffer = current_char
             while (++current_pos <= length(input_line)) {
                 current_char = get_current_char(input_line, current_pos)
+                #print "rem. trailing comma: traling block: char:" current_char
                 if (current_char == " " || current_char == "\t") {
                     buffer = buffer current_char
                     continue
                 } else if (is_end_trailing_comma_block(current_char)) {
-                    buffer = current_char
                     break
                 } else {
-                    buffer = buffer current_char
                     break
                 }
             }
-            # break, or end of line reached
-            if (!is_end_trailing_comma_block(current_char)) {
-                Trailing_comma["is_open"] = true
-                Trailing_comma["buffer"] = buffer
-                return
+
+            if (is_end_trailing_comma_block(current_char)) {
+                #print "rem. trailing comma: end trailing, buffer:-" buffer "-"
+                gsub(/ +/, " ", buffer)
+                gsub(/\t+/, "\t", buffer)
+                gsub(/,/, "", buffer)
+                output = output buffer current_char
+                current_pos++
+                continue
             }
-            output = outbut buffer
+
+            # end of line, trailing comma block is open
+            if (current_pos > length(input_line)) {
+                if (!Trailing_comma["buffer"]) {
+                    Trailing_comma["buffer"] = buffer
+                }
+                #print "rem. trailing comma: block is open, returning"
+                return trim_right(output)
+            }
+
+            # other char which breaks trailing comma block
+            # process the character again
+            print "rem. trailing comma: " current_char " breaks block, process again"
+            output = output buffer
+            continue
         }
+
+        output = output current_char
+        if (Trailing_comma["buffer"]) {
+            Trailing_comma["buffer"] = ""
+        }
+        current_pos++
     }
 
-    # trim ending spaces
-    return trim_right(output)
+    #print "rem. trailing comma: output:" output
+    # add newline, because this is normally processed end of line
+    output = trim_right(output)# "\n"
+    return output
 }
 
 function is_end_trailing_comma_block(char) {
-     #return current_char == "]" || current_char == "}"
-}
-
-function remove_trailing_comma_from_arr(str) {
-    gsub(/,[[:space:]]+]$/, " ]", str)
-    gsub(/,]$/, "]", str)
-    return str
+     return char == "]" || char == "}"
 }
 
 # get next json string from current line and position
-# json doesn't support real multi line string
+# json doesnt support real multi line string
 function get_next_string(input_line, current_pos,   current_char, buffer) {
     current_char = get_current_char(input_line, current_pos)
     buffer = current_char
@@ -251,7 +277,8 @@ function quote(str, quoting_char) {
 }
 
 convert() {
-    strip_alone_line_comments | strip_jsonc_specific_chars | strip_trailing_commas
+    strip_alone_line_comments | strip_jsonc_specific_chars
+    #| strip_trailing_commas
 }
 
 print_help() {
