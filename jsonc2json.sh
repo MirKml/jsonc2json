@@ -80,7 +80,10 @@ In_multi_line_comment == 1 {
 {
     current_line = remove_comments($0)
     current_block = remove_trailing_comma(current_line)
-    printf("current block: --%s--\n", current_block)
+    #printf("current block: --%s--\n", current_block)
+    # intentionally use printf, if there is trailing comma at the end of line
+    # returned block are without eol
+    printf(current_block)
 }
 
 function remove_comments(input_line,      current_pos, current_char, buffer, token_val, output) {
@@ -203,13 +206,13 @@ function remove_trailing_comma(input_line,      current_pos, current_char, outpu
                 if (!Trailing_comma["buffer"]) {
                     Trailing_comma["buffer"] = buffer
                 }
-                #print "rem. trailing comma: block is open, returning"
+                #print "rem. trailing comma: block is opened, return output without opened block"
                 return trim_right(output)
             }
 
             # other char which breaks trailing comma block
             # process the character again
-            print "rem. trailing comma: " current_char " breaks block, process again"
+            #print "rem. trailing comma: " current_char " breaks block, process again"
             output = output buffer
             continue
         }
@@ -222,9 +225,8 @@ function remove_trailing_comma(input_line,      current_pos, current_char, outpu
     }
 
     #print "rem. trailing comma: output:" output
-    # add newline, because this is normally processed end of line
-    output = trim_right(output)# "\n"
-    return output
+    # add eol, because printf is used for output and there is no opened trailing comma block
+    return trim_right(output) "\n"
 }
 
 function is_end_trailing_comma_block(char) {
