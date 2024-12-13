@@ -1,22 +1,8 @@
 # jsonc2json.sh
-JSONC to JSON conversion utility in shell (bash with help of awk, sed), for shell
+JSONC to JSON conversion utility in shell (awk, bash, sed), for shell
 
 ## Quick usage
 from command line - `./jsonc2json.sh < config.jsonc > config.json`
-
-as bash library
-- loads the source script with `--aslib` option as library
-- use `convert` function with $1 parameter as JSONC source string
-
-```bash
-#!/usr/bin/env bash
-set -euo pipefail
-
-source "./jsonc2json.sh --aslib"
-local original_json="\"arrayProp\": [ 0, 1, \"test\", ]"
-
-convert <<< "$original_json"
-```
 
 ## Description
 It converts JSONC file - JSON with comments - into JSON file. This format is more appropriate for human-readable
@@ -38,12 +24,25 @@ Other JSONC like formats have many other features, e.g. [JSON5](https://github.c
 But this is out of scope of this utility.
 
 Benefits - It isn't based on regexps, simple scanner/tokenizer approach is used, mostly in awk. I think it covers more use cases and
-it's more reliable. Regexps are used in corner cases.
+it's more reliable. Some regexps are used in safe edge parts.
 
 Shortcomings
  - Scanner is very simple, isn't rock solid, extensible, understandable. Mostly because of awk, sed and bash, which aren't very favorable for such task. It
  - No syntax checks, errors are provided. It's out of scope. It's up to you if your JSONC and converted JSON is valid - use e.g. famous [jq](https://github.com/jqlang/jq/) tool.
 
+## Usage as bash code library
+- loads the source script with `--aslib` option as library
+- use `jsonc_convert` function with $1 parameter as JSONC source string
+
+```bash
+#!/usr/bin/env bash
+set -euo pipefail
+
+source "./jsonc2json.sh --aslib"
+original_json="\"arrayProp\": [ 0, 1, \"test\", ]"
+
+jsonc_convert <<< "$original_json"
+```
 ## Example
 
 JSONC config.jsonc file
