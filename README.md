@@ -20,7 +20,7 @@ Supported features
 
 All these are removed during conversion.
 
-Other JSONC like formats have many other features, e.g. [JSON5](https://github.com/json5/json5), [HJSON](https://github.com/hjson/) implement empty values, numbers ...
+Other JSONC like formats have many other features, e.g. [JSON5](https://github.com/json5/json5), [HJSON](https://github.com/hjson/) implement multi-line strings, empty values, numbers ...
 But this is out of scope of this utility.
 
 Benefits - It isn't based on regexps, simple scanner/tokenizer approach is used, mostly in awk. I think it covers more use cases and
