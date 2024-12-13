@@ -27,7 +27,7 @@ Benefits - It isn't based on regexps, simple scanner/tokenizer approach is used,
 it's more reliable. Some regexps are used in safe edge parts.
 
 Shortcomings
- - Scanner is very simple, isn't rock solid, extensible, understandable. Mostly because of awk, sed and bash, which aren't very favorable for such task. It
+ - Scanner is very simple, isn't rock solid, extensible, understandable. Mostly because of awk, sed and bash, which aren't very favorable for such task.
  - No syntax checks, errors are provided. It's out of scope. It's up to you if your JSONC and converted JSON is valid - use e.g. famous [jq](https://github.com/jqlang/jq/) tool.
 
 ## Usage as bash code library
