@@ -2,7 +2,8 @@
 JSONC to JSON conversion utility in shell (awk, bash, sed), for shell
 
 ## Quick usage
-from command line - `./jsonc2json.sh < config.jsonc > config.json`
+from command line - `./jsonc2json.sh < config.jsonc > config.json`\
+You can also use script [as bash library](#usage-as-bash-code-library) in your bash scripts.
 
 ## Description
 It converts JSONC file - JSON with comments - into JSON file. This format is more appropriate for human-readable
