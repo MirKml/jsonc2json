@@ -1,5 +1,4 @@
 #!/usr/bin/env bash
-# removes
 set -euo pipefail
 
 # remove line or multi line comments on single line
@@ -9,11 +8,13 @@ strip_alone_line_comments() {
     sed -e "/^[[:blank:]]*\/\//d" -e "/^[[:blank:]]*\/\*.*\*\/[[:blank:]]*$/d"
 }
 
+# just for learning purposed
 # removing trailing commas with simple :-) sed
-# doesn't bother if trailing comma is inside string or not
-# because this case i really rare, maybe when json contains some parts for code generation
+# drawback/bug: remove trailing commas from json string
+# e.g. { "prop": "val = { val , }" } => { "prop": "val = { val }" }
 #
-# todo: try to replace with json string based scanner of whole json string
+# rare case, but can be there is some javascript code inside json values
+# currently isn't used anymore, implemented in awk
 # stdin - line stream of jsonc file
 strip_trailing_commas() {
     sed -e '
@@ -38,16 +39,13 @@ s/,[[:space:]]*\([]}]\)/ \1/g;'
 # removes
 # - single line comments
 # - multiple line comments
-# - trailing commas in arrays
+# - trailing commas
 # all these can be mixed inside with other json like chars
 strip_jsonc_specific_chars() {
     awk \
 '
 BEGIN {
     In_multi_line_comment = 0
-    # contains array over multiple lines
-    Multi_line_array["content"] = ""
-    Multi_line_array["is_open"] = 0
 }
 
 /^[[:blank:]]*\/\*/ {
@@ -60,6 +58,7 @@ BEGIN {
     next
 }
 
+# we are in multi-line comment
 # return all after multiline comment end - "*/"
 In_multi_line_comment == 1 {
     # no end of multi line comment found
@@ -78,8 +77,20 @@ In_multi_line_comment == 1 {
     }
 }
 
+# executed only if we aren'"'"'t in multiline comment
+# notice (be aware of single quite in single quote in previous comment, because we are generally in bash :-))
 {
-    print remove_comments($0)
+    current_line = remove_comments($0)
+
+    Traling_comma_debug = 0
+    current_block = remove_trailing_comma(current_line)
+    # intentionally use printf, if there is trailing comma at the end of line
+    # returned block are without eol
+    if (Traling_comma_debug) {
+        printf("rem. trailing comma: current block: --%s--\n", current_block)
+    } else {
+        printf(current_block)
+    }
 }
 
 function remove_comments(input_line,      current_pos, current_char, buffer, token_val, output) {
@@ -150,105 +161,98 @@ function remove_comments(input_line,      current_pos, current_char, buffer, tok
     return trim_right(output)
 }
 
-function remove_trailing_comma(input_line,      current_pos, current_char, output, buffer, next_array_result) {
-    output = ""
+function remove_trailing_comma(input_line,      current_pos, current_char, output, buffer) {
     current_pos = 1
+    output = ""
 
-    # print "line: " input_line
-    # print "length: " length(input_line)
+    trailing_comma_dbg("line:" input_line)
+
+    if (Trailing_comma["buffer"] && !length(input_line)) {
+        return
+    }
 
     while (current_pos <= length(input_line)) {
         current_char = get_current_char(input_line, current_pos)
-        # printf("rem. traling comma: char: %s", current_char)
 
-        # we are in array context from previous line, handle first
-        if (Multi_line_array["is_open"]) {
-            buffer = get_next_array(input_line, current_pos)
-            current_pos += length(buffer) - 1
+        trailing_comma_dbg(sprintf("pos: %s char: %s out: %s", current_pos, current_char, output))
 
-            if (Multi_line_array["is_open"]) {
-                Multi_line_array["content"] = Multi_line_array["content"] buffer "\n"
-            } else {
-                buffer = Multi_line_array["content"] buffer
-                Multi_line_array["content"] = ""
-                output = output remove_trailing_comma_from_arr(buffer)
-            }
-
-        # string e.g. "some string input with escape \" rest of string"
-        } else if (current_char == "\"") {
+        # string e.g. "some string input with escape \" { test, } ..."
+        if (!Trailing_comma["buffer"] && current_char == "\"") {
             buffer = get_next_string(input_line, current_pos)
             output = output buffer
-            # -1 because already read current_char
-            current_pos += length(buffer) - 1
+            current_pos += length(buffer)
+            continue
+        }
 
-        # array handling in current context
-        } else if (current_char == "[") {
-            print "array start"
-            buffer = get_next_array(input_line, current_pos)
-            current_pos += length(buffer) - 1
-
-            if (Multi_line_array["is_open"]) {
-                Multi_line_array["content"] = buffer "\n"
+        if (Trailing_comma["buffer"] || current_char == ",") {
+            if (Trailing_comma["buffer"]) {
+                buffer = Trailing_comma["buffer"] "\n"
+                # when trailing buffer is opened, its necessary to process current character
+                # again, because it can be ] } which must not be skipped
+                current_pos--
             } else {
-                if (Multi_line_array["content"]) {
-                    buffer = Multi_line_array["content"] buffer
-                    Multi_line_array["content"] = ""
+                buffer = current_char
+            }
+
+            while (++current_pos <= length(input_line)) {
+                current_char = get_current_char(input_line, current_pos)
+                trailing_comma_dbg("trailing block char:" current_char)
+                if (current_char == " " || current_char == "\t") {
+                    buffer = buffer current_char
+                    continue
+                } else if (is_trailing_comma_buffer_end(current_char)) {
+                    break
+                } else {
+                    break
                 }
-                output = output remove_trailing_comma_from_arr(buffer)
             }
 
-        # other char
-        } else {
-            # next input char iteration
-            output = output current_char
-        }
+            if (is_trailing_comma_buffer_end(current_char)) {
+                trailing_comma_dbg("end trailing buffer:-" buffer "-")
+                gsub(/,/, "", buffer)
+                output = output buffer current_char
+                Trailing_comma["buffer"] = ""
+                current_pos++
+                continue
+            }
 
-        current_pos++
-    }
+            # end of line, trailing comma block is open
+            if (current_pos > length(input_line)) {
+                trailing_comma_dbg("saving buffer:" buffer)
+                Trailing_comma["buffer"] = buffer
+                trailing_comma_dbg("buffer is opened, returns only output")
+                return trim_right(output)
+            }
 
-    return output
-}
-
-# get next array string
-# sets Multi_line_array if array is not closed till the end of line
-function get_next_array(input_line, current_pos,    current_char, output, buffer) {
-    while (current_pos <= length(input_line)) {
-        Multi_line_array["is_open"] = 1
-        current_char = get_current_char(input_line, current_pos)
-        #print "next arr current char: " current_char
-
-        # string in array
-        if (current_char == "\"") {
-            buffer = get_next_string(input_line, current_pos)
+            # other char which breaks trailing comma block
+            # process current character again
+            trailing_comma_dbg("char " current_char " breaks buffer, process again")
+            Trailing_comma["buffer"] = ""
             output = output buffer
-            current_pos += length(buffer) - 1
-
-        # end of array
-        } else if (current_char == "]") {
-            output = output current_char
-            Multi_line_array["is_open"] = 0
-            break;
-
-        # another char
-        } else {
-            output = output current_char
+            continue
         }
 
+        output = output current_char
+        Trailing_comma["buffer"] = ""
         current_pos++
     }
 
-    # do not modify returned array string, always preserve original length
-    # because we calc the positon according length
-    return output
+    # add eol, because printf is used for output and there is no opened trailing comma block
+    return trim_right(output) "\n"
 }
 
-function remove_trailing_comma_from_arr(str) {
-    gsub(/,[[:space:]]+]$/, " ]", str)
-    gsub(/,]$/, "]", str)
-    return str
+function is_trailing_comma_buffer_end(char) {
+     return char == "]" || char == "}"
+}
+
+function trailing_comma_dbg(str) {
+    if (Traling_comma_debug) {
+        print "rem. trailing comma: " str
+    }
 }
 
 # get next json string from current line and position
+# json doesnt support real multi line string
 function get_next_string(input_line, current_pos,   current_char, buffer) {
     current_char = get_current_char(input_line, current_pos)
     buffer = current_char
@@ -292,8 +296,9 @@ function quote(str, quoting_char) {
 '
 }
 
-convert() {
-    strip_alone_line_comments | strip_jsonc_specific_chars | strip_trailing_commas
+jsonc_convert() {
+    strip_alone_line_comments | strip_jsonc_specific_chars
+    #| strip_trailing_commas
 }
 
 print_help() {
@@ -330,9 +335,9 @@ main() {
     done
 
     if [ -n "$input_file" ]; then
-        convert < "$input_file"
+        jsonc_convert < "$input_file"
     else
-        convert
+        jsonc_convert
     fi
 }
 

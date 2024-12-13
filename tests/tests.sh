@@ -10,7 +10,7 @@ test_run() {
     local message="${3:-"test (no message)"}"
 
     local result_status=0
-    local result_json=$(convert <<< "$original_json")
+    local result_json=$(jsonc_convert <<< "$original_json")
 
     #echo -e "original: $original_json\nexpected: $expected_json\nresult:   $result_json"
     [ "$expected_json" = "$result_json" ] && echo "$message OK" \
@@ -21,17 +21,41 @@ test_run() {
 
 load_lib() {
     local script_dir="$1"
-    source "$script_dir"/jsonc2json.sh --aslib
+    source "$script_dir/.."/jsonc2json.sh --aslib
 }
 
 debug_test() {
-    local script_dir=$(dirname $0)
     load_lib "$(dirname $0)"
 
-    local original_json="\"arrayProp\": [ 0, 1, \"test\", ]"
-    local expected_json="\"arrayProp\": [ 0, 1, \"test\" ]"
+    local original_json=$(cat <<JSONC
+{
+    "prop1": "prop1Value",
+    "prop22": [
+         true, false, null,
+        "test, }",
+    ],
+    "prop23": {
+        "prop24": "string with , ] inside",
+    },
+}
+JSONC
+)
+
+    local expected_json=$(cat <<JSONC
+{
+    "prop1": "prop1Value",
+    "prop22": [
+         true, false, null,
+        "test, }"
+    ],
+    "prop23": {
+        "prop24": "string with , ] inside"
+    }
+}
+JSONC
+)
     echo -e "original: $original_json\nexpected: $expected_json\nresult:   \n"
-    $(convert <<< "$original_json")
+    jsonc_convert <<< "$original_json"
 }
 #debug_test
 #exit
@@ -51,7 +75,7 @@ all_tests() {
 
     message="test trailing comma no. 2"
     original_json="[ 0, 1, \"test\",] "
-    expected_json="[ 0, 1, \"test\" ]"
+    expected_json="[ 0, 1, \"test\"]"
     if ! test_run "$original_json" "$expected_json" "$message"; then
         result_status=1
     fi
@@ -70,7 +94,7 @@ JSONC
 "prop1": [ "arrval1", "arrVal2", 12,
     "test",
     null
-    ],
+    ]
 JSONC
 )
     if ! test_run "$original_json" "$expected_json" "$message"; then
@@ -108,6 +132,96 @@ JSONC
     if ! test_run "$original_json" "$expected_json" "$message"; then
         result_status=1
     fi
+#===========
+
+    message="test trailing comma no. 5"
+    original_json=$(cat <<JSONC
+[
+    "arrval1", "arrVal2", null,
+    1234, "arraVal 3",
+    {
+        "test1": true,
+        "test2": false,
+    },
+
+
+
+],
+JSONC
+)
+    expected_json=$(cat <<JSONC
+[
+    "arrval1", "arrVal2", null,
+    1234, "arraVal 3",
+    {
+        "test1": true,
+        "test2": false
+    }
+]
+JSONC
+)
+    if ! test_run "$original_json" "$expected_json" "$message"; then
+        result_status=1
+    fi
+
+#===========
+
+    message="test trailing comma no. 6"
+    original_json=$(cat <<JSONC
+{
+    "prop1": "prop1Value",
+    "prop22": [
+         true, false, null,
+        "test, }",
+    ],
+    "prop23": {
+        "prop24": "string with , ] inside",
+    },
+}
+JSONC
+)
+
+    expected_json=$(cat <<JSONC
+{
+    "prop1": "prop1Value",
+    "prop22": [
+         true, false, null,
+        "test, }"
+    ],
+    "prop23": {
+        "prop24": "string with , ] inside"
+    }
+}
+JSONC
+)
+    if ! test_run "$original_json" "$expected_json" "$message"; then
+        result_status=1
+    fi
+
+#===========
+
+    message="test trailing comma no. 7"
+    original_json=$(cat <<JSONC
+{
+    "prop1": "prop1Value",
+    "prop22": { "prop21": "prop21Value", "prop22": true, },
+    "prop22": { "prop21": "prop21Value", "prop22": [ true, "test", ], }
+}
+JSONC
+)
+
+    expected_json=$(cat <<JSONC
+{
+    "prop1": "prop1Value",
+    "prop22": { "prop21": "prop21Value", "prop22": true },
+    "prop22": { "prop21": "prop21Value", "prop22": [ true, "test" ] }
+}
+JSONC
+)
+    if ! test_run "$original_json" "$expected_json" "$message"; then
+        result_status=1
+    fi
+
 #===========
 
     message="test multi line comment no. 1"
