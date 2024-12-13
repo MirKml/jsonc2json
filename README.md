@@ -89,6 +89,7 @@ JSONC config.jsonc file
 ```
 
 can be converted into JSON config.json file with command `cat config.jsonc | ./jsonc2json.sh > config.json`
+content of converted config.json
 ```json
 {
     "prop1": "prop1Value",
