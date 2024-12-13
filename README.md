@@ -30,6 +30,7 @@ it's more reliable. Some regexps are used in safe edge parts.
 Shortcomings
  - Scanner is very simple, isn't rock solid, extensible, understandable. Mostly because of awk, sed and bash, which aren't very favorable for such task.
  - No syntax checks, errors are provided. It's out of scope. It's up to you if your JSONC and converted JSON is valid - use e.g. famous [jq](https://github.com/jqlang/jq/) tool.
+ - No formatting, it's up to you, e.g. via plugin in your editor.
 
 ## Usage as bash code library
 - loads the source script with `--aslib` option as library
