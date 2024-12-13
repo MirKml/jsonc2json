@@ -296,7 +296,7 @@ function quote(str, quoting_char) {
 '
 }
 
-convert() {
+jsonc_convert() {
     strip_alone_line_comments | strip_jsonc_specific_chars
     #| strip_trailing_commas
 }
@@ -335,9 +335,9 @@ main() {
     done
 
     if [ -n "$input_file" ]; then
-        convert < "$input_file"
+        jsonc_convert < "$input_file"
     else
-        convert
+        jsonc_convert
     fi
 }
 

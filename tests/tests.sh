@@ -10,7 +10,7 @@ test_run() {
     local message="${3:-"test (no message)"}"
 
     local result_status=0
-    local result_json=$(convert <<< "$original_json")
+    local result_json=$(jsonc_convert <<< "$original_json")
 
     #echo -e "original: $original_json\nexpected: $expected_json\nresult:   $result_json"
     [ "$expected_json" = "$result_json" ] && echo "$message OK" \
@@ -55,7 +55,7 @@ JSONC
 JSONC
 )
     echo -e "original: $original_json\nexpected: $expected_json\nresult:   \n"
-    convert <<< "$original_json"
+    jsonc_convert <<< "$original_json"
 }
 #debug_test
 #exit
