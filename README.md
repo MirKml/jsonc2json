@@ -34,7 +34,7 @@ Shortcomings
 
 ## Usage as bash code library
 - loads the source script with `--aslib` option as library
-- use `jsonc_convert` function with $1 parameter as JSONC source string
+- use `jsonc_convert` function with stdin as stream of JSONC source string (piping)
 
 ```bash
 #!/usr/bin/env bash
